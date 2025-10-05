@@ -1,6 +1,6 @@
 // App.tsx (updated)
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -15,6 +15,9 @@ import { PetProvider, usePet } from './src/context/PetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import { useTranslation } from 'react-i18next';
+import './src/i18n';           // ensure module is loaded
+import { initI18n } from './src/i18n';
 
 const LightTheme: Theme = {
   ...DefaultTheme,
@@ -33,7 +36,21 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function AppTabs() {
+  const [ready, setReady] = useState(false);
   const { logout } = useAuth();
+  const { t } = useTranslation();
+
+
+   useEffect(() => {
+    (async () => {
+      await initI18n(); // sets saved/device language (defaults to nb)
+      setReady(true);
+    })();
+  }, []);
+
+  if (!ready) return null;
+
+
 
   return (
     <Tab.Navigator
@@ -47,6 +64,13 @@ function AppTabs() {
         ),
         tabBarActiveTintColor: '#2563eb',
         tabBarInactiveTintColor: '#6b7280',
+        tabBarLabel:
+          route.name === 'Home'    ? t('tabs_home')   :
+          route.name === 'Feeding' ? t('tabs_feeding'):
+          route.name === 'Walk'    ? t('tabs_walk')   :
+          route.name === 'Weight'  ? t('tabs_weight') :
+          route.name === 'Bath'    ? t('tabs_bath')   :
+           t('tabs_profile'),
         tabBarIcon: ({ color, size, focused }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home-outline';
           if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';

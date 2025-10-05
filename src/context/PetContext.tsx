@@ -1,20 +1,20 @@
-import React, { createContext, useContext, useMemo, type ReactNode, useState, useCallback, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  type ReactNode,
+  useState,
+  useCallback,
+  useEffect,
+} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch } from '../api/client';
 import { useAuth } from './AuthContext';
 
 // ===== Types expected by the rest of the app =====
-export type FeedingRecord = {
-  id: number;
-  timestamp: number;
-  fed: boolean;
-};
+export type FeedingRecord = { id: number; timestamp: number; fed: boolean };
 export type BathRecord = { timestamp: number };
-export type WalkRecord = {
-  id: number;
-  timestamp: number;
-  walked: boolean;
-};
+export type WalkRecord = { id: number; timestamp: number; walked: boolean };
 export type WeightRecord = { timestamp: number; weightKg: number };
 
 export type PetContextValue = {
@@ -45,7 +45,6 @@ type ApiWalk = { id: number; walk_check: boolean; walked_at: string; pet_id: num
 type ApiBath = { id: number; bathed_at: string; pet_id: number; user_id: number };
 type ApiWeight = { id: number; value: number; weighed_at: string; pet_id: number; user_id: number };
 
-// Some endpoints may be paginated (Laravel's apiResource with paginate()).
 // Accept either an array or { data: [...] }.
 function unwrapList<T>(res: T[] | { data: T[] }): T[] {
   return Array.isArray(res) ? res : res?.data ?? [];
@@ -62,7 +61,18 @@ function getLatestTimestamp<T extends { timestamp: number }>(items: T[]): number
   return max;
 }
 
-const STORAGE_PET_ID = 'pet-tracker/active-pet-id';
+// ===== Local cache keys =====
+const STORAGE_ACTIVE_PET_ID = 'pet-tracker/active-pet-id';
+const CACHE_PREFIX = 'pet-tracker/cache/v2';
+const cacheKey = (petId: number) => `${CACHE_PREFIX}/${petId}`;
+
+type CachedBundle = {
+  pet: ApiPet | null;
+  feedings: FeedingRecord[];
+  walks: WalkRecord[];
+  baths: BathRecord[];
+  weights: WeightRecord[];
+};
 
 export function PetProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
@@ -70,16 +80,22 @@ export function PetProvider({ children }: { children: ReactNode }) {
   // Active pet metadata
   const [pet, setPet] = useState<ApiPet | null>(null);
 
-  // Activity state from backend
+  // Activity state from backend (and cache)
   const [feedings, setFeedings] = useState<FeedingRecord[]>([]);
   const [baths, setBaths] = useState<BathRecord[]>([]);
   const [walks, setWalks] = useState<WalkRecord[]>([]);
   const [weights, setWeights] = useState<WeightRecord[]>([]);
 
-  // ---- Bootstrap: pick active pet, then load activity ----
+  // ---- Persist state to cache whenever it changes ----
+  useEffect(() => {
+    if (!pet?.id) return;
+    const payload: CachedBundle = { pet, feedings, walks, baths, weights };
+    AsyncStorage.setItem(cacheKey(pet.id), JSON.stringify(payload)).catch(() => {});
+  }, [pet?.id, pet, feedings, walks, baths, weights]);
+
+  // ---- Bootstrap: load from cache immediately, then refresh from API ----
   useEffect(() => {
     if (!token) {
-      // Logged out → reset local state
       setPet(null);
       setFeedings([]);
       setBaths([]);
@@ -91,24 +107,49 @@ export function PetProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
+      // 0) Try load cached bundle for stored active pet (instant UI)
+      const storedId = await AsyncStorage.getItem(STORAGE_ACTIVE_PET_ID);
+      const activeId = storedId ? Number(storedId) : undefined;
+      if (activeId && Number.isFinite(activeId)) {
+        const raw = await AsyncStorage.getItem(cacheKey(activeId));
+        if (raw && !cancelled) {
+          try {
+            const cached = JSON.parse(raw) as CachedBundle;
+            if (cached.pet) setPet(cached.pet);
+            setFeedings(Array.isArray(cached.feedings) ? cached.feedings : []);
+            setWalks(Array.isArray(cached.walks) ? cached.walks : []);
+            setBaths(Array.isArray(cached.baths) ? cached.baths : []);
+            setWeights(Array.isArray(cached.weights) ? cached.weights : []);
+          } catch {
+            // ignore malformed cache
+          }
+        }
+      }
+
+      // 1) Load pets from API
+      let selected: ApiPet | undefined;
       try {
-        // 1) Load pets
         const petsRes = await apiFetch<ApiPet[] | { data: ApiPet[] }>('/pets');
         const pets = unwrapList<ApiPet>(petsRes);
         if (pets.length === 0) {
           if (!cancelled) setPet(null);
           return;
         }
-
-        // 2) Select active pet (persist between sessions)
-        const storedId = await AsyncStorage.getItem(STORAGE_PET_ID);
-        const selected = pets.find(p => String(p.id) === storedId) ?? pets[0];
+        const storedActiveId = storedId ?? (await AsyncStorage.getItem(STORAGE_ACTIVE_PET_ID));
+        selected = pets.find(p => String(p.id) === storedActiveId) ?? pets[0];
         if (!cancelled) {
           setPet(selected);
-          if (String(selected.id) !== storedId) await AsyncStorage.setItem(STORAGE_PET_ID, String(selected.id));
+          await AsyncStorage.setItem(STORAGE_ACTIVE_PET_ID, String(selected.id));
         }
+      } catch {
+        // If API for pets fails, keep showing whatever we had from cache.
+        return;
+      }
 
-        // 3) Load activities for active pet
+      if (!selected || cancelled) return;
+
+      // 2) Load activities for active pet (prefer network; cache already shown)
+      try {
         const petId = selected.id;
         const [feedingsRaw, walksRaw, bathsRaw, weightsRaw] = await Promise.all([
           apiFetch<ApiFeeding[] | { data: ApiFeeding[] }>(`/feedings?pet_id=${petId}`),
@@ -119,41 +160,32 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
         if (cancelled) return;
 
-       setFeedings(
-  unwrapList(feedingsRaw)
-    .map(f => ({
-      id: f.id, // <-- keep id
-      timestamp: Date.parse(f.fed_at),
-      fed: !!f.feed_check,
-    }))
-    .sort((a, b) => b.timestamp - a.timestamp)
-);
+        setFeedings(
+          unwrapList(feedingsRaw)
+            .map((f) => ({ id: f.id, timestamp: Date.parse(f.fed_at), fed: !!f.feed_check }))
+            .sort((a, b) => b.timestamp - a.timestamp)
+        );
 
-    setWalks(
-  unwrapList(walksRaw)
-    .map(w => ({
-      id: w.id, // <-- keep id
-      timestamp: Date.parse(w.walked_at),
-      walked: !!w.walk_check,
-    }))
-    .sort((a, b) => b.timestamp - a.timestamp)
-);
+        setWalks(
+          unwrapList(walksRaw)
+            .map((w) => ({ id: w.id, timestamp: Date.parse(w.walked_at), walked: !!w.walk_check }))
+            .sort((a, b) => b.timestamp - a.timestamp)
+        );
 
         setBaths(
           unwrapList(bathsRaw)
-            .map(b => ({ timestamp: Date.parse(b.bathed_at) }))
+            .map((b) => ({ timestamp: Date.parse(b.bathed_at) }))
             .sort((a, b) => b.timestamp - a.timestamp)
         );
 
         setWeights(
           unwrapList(weightsRaw)
-            .map(w => ({ timestamp: Date.parse(w.weighed_at), weightKg: Number(w.value) }))
+            .map((w) => ({ timestamp: Date.parse(w.weighed_at), weightKg: Number(w.value) }))
             .sort((a, b) => b.timestamp - a.timestamp)
         );
       } catch (e) {
-        // Network/API errors should be surfaced in UI if desired.
-        // For now we keep the state empty; consumers can decide how to handle.
-        console.warn('Failed to load pet data', e);
+        // Ignore; we already showed cache. Network can fail without breaking UI.
+        console.warn('Failed to refresh pet data from API', e);
       }
     })();
 
@@ -162,128 +194,109 @@ export function PetProvider({ children }: { children: ReactNode }) {
     };
   }, [token]);
 
-  // ---- Mutations: call API then update local cache ----
-const setFedToday = useCallback(
-  async (fed: boolean) => {
-    if (!pet) return;
+  // ---- Mutations: API-first (keeps server as source of truth), cache persists via effect ----
+  const setFedToday = useCallback(
+    async (fed: boolean) => {
+      if (!pet) return;
 
-    const nowIso = new Date().toISOString();
-    const today = new Date();
+      const nowIso = new Date().toISOString();
+      const today = new Date();
 
-    // Find today's feedings (if any)
-    const todays = feedings
-      .filter(f => isSameDay(new Date(f.timestamp), today))
-      .sort((a, b) => b.timestamp - a.timestamp);
+      const todays = feedings
+        .filter((f) => isSameDay(new Date(f.timestamp), today))
+        .sort((a, b) => b.timestamp - a.timestamp);
+      const latestToday = todays[0];
 
-    const latestToday = todays[0];
-
-    if (fed) {
-      // If we already have a record today, PATCH it to fed=true (upsert-like)
-      if (latestToday) {
-        await apiFetch(`/feedings/${latestToday.id}`, {
-          method: 'PATCH',
-          body: { feed_check: true, fed_at: nowIso },
-        });
-        setFeedings(prev =>
-          prev.map(f =>
-            f.id === latestToday.id ? { ...f, fed: true, timestamp: Date.parse(nowIso) } : f
-          )
-        );
+      if (fed) {
+        if (latestToday) {
+          await apiFetch(`/feedings/${latestToday.id}`, {
+            method: 'PATCH',
+            body: { feed_check: true, fed_at: nowIso },
+          });
+          setFeedings((prev) =>
+            prev.map((f) => (f.id === latestToday.id ? { ...f, fed: true, timestamp: Date.parse(nowIso) } : f))
+          );
+        } else {
+          const created = await apiFetch<{ id: number; fed_at: string; feed_check: boolean }>('/feedings', {
+            method: 'POST',
+            body: { pet_id: pet.id, feed_check: true, fed_at: nowIso },
+          });
+          setFeedings((prev) => [
+            { id: created.id, fed: true, timestamp: Date.parse(created.fed_at ?? nowIso) },
+            ...prev,
+          ]);
+        }
       } else {
-        // No record today → create one
-        const created = await apiFetch<{ id: number; fed_at: string; feed_check: boolean }>(
-          '/feedings',
-          { method: 'POST', body: { pet_id: pet.id, feed_check: true, fed_at: nowIso } }
-        );
-        setFeedings(prev => [
-          {
-            id: created.id,
-            fed: true,
-            timestamp: Date.parse(created.fed_at ?? nowIso),
-          },
-          ...prev,
-        ]);
+        if (!latestToday) return;
+        await apiFetch(`/feedings/${latestToday.id}`, { method: 'DELETE' });
+        setFeedings((prev) => prev.filter((f) => f.id !== latestToday.id));
       }
-    } else {
-      // fed === false → DELETE today’s latest feeding if exists
-      if (!latestToday) return;
-      await apiFetch(`/feedings/${latestToday.id}`, { method: 'DELETE' });
-      setFeedings(prev => prev.filter(f => f.id !== latestToday.id));
-    }
-  },
-  [pet, feedings]
-);
-  
+    },
+    [pet, feedings]
+  );
 
   const setBathedToday = useCallback(async () => {
     if (!pet) return;
     const nowIso = new Date().toISOString();
-    await apiFetch('/baths', {
-      method: 'POST',
-      body: { pet_id: pet.id, bathed_at: nowIso },
-    });
-    setBaths(prev => [{ timestamp: Date.parse(nowIso) }, ...prev]);
+    await apiFetch('/baths', { method: 'POST', body: { pet_id: pet.id, bathed_at: nowIso } });
+    setBaths((prev) => [{ timestamp: Date.parse(nowIso) }, ...prev]);
   }, [pet]);
 
-const setWalkedToday = useCallback(
-  async (walked: boolean) => {
-    if (!pet) return;
-    const nowIso = new Date().toISOString();
-    const today = new Date();
+  const setWalkedToday = useCallback(
+    async (walked: boolean) => {
+      if (!pet) return;
+      const nowIso = new Date().toISOString();
+      const today = new Date();
 
-    const todays = walks
-      .filter(w => isSameDay(new Date(w.timestamp), today))
-      .sort((a, b) => b.timestamp - a.timestamp);
-    const latestToday = todays[0];
+      const todays = walks
+        .filter((w) => isSameDay(new Date(w.timestamp), today))
+        .sort((a, b) => b.timestamp - a.timestamp);
+      const latestToday = todays[0];
 
-    if (walked) {
-      if (latestToday) {
-        // Update existing today entry
-        await apiFetch(`/walks/${latestToday.id}`, {
-          method: 'PATCH',
-          body: { walk_check: true, walked_at: nowIso },
-        });
-        setWalks(prev =>
-          prev.map(w =>
-            w.id === latestToday.id ? { ...w, walked: true, timestamp: Date.parse(nowIso) } : w
-          )
-        );
+      if (walked) {
+        if (latestToday) {
+          await apiFetch(`/walks/${latestToday.id}`, {
+            method: 'PATCH',
+            body: { walk_check: true, walked_at: nowIso },
+          });
+          setWalks((prev) =>
+            prev.map((w) => (w.id === latestToday.id ? { ...w, walked: true, timestamp: Date.parse(nowIso) } : w))
+          );
+        } else {
+          const created = await apiFetch<{ id: number; walked_at: string; walk_check: boolean }>('/walks', {
+            method: 'POST',
+            body: { pet_id: pet.id, walk_check: true, walked_at: nowIso },
+          });
+          setWalks((prev) => [
+            { id: created.id, walked: true, timestamp: Date.parse(created.walked_at ?? nowIso) },
+            ...prev,
+          ]);
+        }
       } else {
-        // Create new today entry
-        const created = await apiFetch<{ id: number; walked_at: string; walk_check: boolean }>(
-          '/walks',
-          { method: 'POST', body: { pet_id: pet.id, walk_check: true, walked_at: nowIso } }
-        );
-        setWalks(prev => [
-          { id: created.id, walked: true, timestamp: Date.parse(created.walked_at ?? nowIso) },
-          ...prev,
-        ]);
+        if (!latestToday) return;
+        await apiFetch(`/walks/${latestToday.id}`, { method: 'DELETE' });
+        setWalks((prev) => prev.filter((w) => w.id !== latestToday.id));
       }
-    } else {
-      if (!latestToday) return; // nothing to delete
-      await apiFetch(`/walks/${latestToday.id}`, { method: 'DELETE' });
-      setWalks(prev => prev.filter(w => w.id !== latestToday.id));
-    }
-  },
-  [pet, walks]
-);
+    },
+    [pet, walks]
+  );
 
-  const setWeightToday = useCallback(async (weightKg: number) => {
-    if (!pet || !Number.isFinite(weightKg) || weightKg <= 0) return;
-    const nowIso = new Date().toISOString();
-    await apiFetch('/weights', {
-      method: 'POST',
-      body: { pet_id: pet.id, value: weightKg, weighed_at: nowIso },
-    });
-    setWeights(prev => [{ timestamp: Date.parse(nowIso), weightKg }, ...prev]);
-  }, [pet]);
+  const setWeightToday = useCallback(
+    async (weightKg: number) => {
+      if (!pet || !Number.isFinite(weightKg) || weightKg <= 0) return;
+      const nowIso = new Date().toISOString();
+      await apiFetch('/weights', { method: 'POST', body: { pet_id: pet.id, value: weightKg, weighed_at: nowIso } });
+      setWeights((prev) => [{ timestamp: Date.parse(nowIso), weightKg }, ...prev]);
+    },
+    [pet]
+  );
 
-  // ---- Derived values (same as your original API) ----
+  // ---- Derived values ----
   const value = useMemo<PetContextValue>(() => {
     const today = new Date();
 
-    const hasFedToday = feedings.some(f => f.fed && isSameDay(new Date(f.timestamp), today));
-    const hasWalkedToday = walks.some(w => w.walked && isSameDay(new Date(w.timestamp), today));
+    const hasFedToday = feedings.some((f) => f.fed && isSameDay(new Date(f.timestamp), today));
+    const hasWalkedToday = walks.some((w) => w.walked && isSameDay(new Date(w.timestamp), today));
 
     const lastBathTs = getLatestTimestamp(baths);
     const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
@@ -293,9 +306,7 @@ const setWalkedToday = useCallback(
     const isBathDueToday = nextBathDueAt ? isSameDay(today, nextBathDueAt) : false;
 
     const latestWeightTs = getLatestTimestamp(weights);
-    const currentWeightKg = latestWeightTs
-      ? weights.find(w => w.timestamp === latestWeightTs)?.weightKg ?? null
-      : null;
+    const currentWeightKg = latestWeightTs ? weights.find((w) => w.timestamp === latestWeightTs)?.weightKg ?? null : null;
 
     return {
       name: pet?.name ?? '',
