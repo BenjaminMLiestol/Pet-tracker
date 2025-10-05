@@ -1,0 +1,95 @@
+import React, { createContext, useContext, useMemo, ReactNode } from 'react';
+
+export type FeedingRecord = {
+  timestamp: number; // unix ms
+};
+
+export type BathRecord = {
+  timestamp: number; // unix ms
+};
+
+export type WeightRecord = {
+  timestamp: number; // unix ms
+  weightKg: number;
+};
+
+export type PetContextValue = {
+  name: string;
+  breed: string;
+  feedings: FeedingRecord[];
+  baths: BathRecord[];
+  weights: WeightRecord[];
+  hasFedToday: boolean;
+  lastBathAt: Date | null;
+  currentWeightKg: number | null;
+};
+
+const PetContext = createContext<PetContextValue | undefined>(undefined);
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function getLatestTimestamp<T extends { timestamp: number }>(items: T[]): number | null {
+  if (items.length === 0) return null;
+  let max = items[0].timestamp;
+  for (let i = 1; i < items.length; i += 1) {
+    if (items[i].timestamp > max) max = items[i].timestamp;
+  }
+  return max;
+}
+
+export function PetProvider({ children }: { children: ReactNode }) {
+  const now = Date.now();
+
+  // Seed data for demo purposes; in a real app this would come from storage or API
+  const feedings: FeedingRecord[] = [
+    { timestamp: now - 1000 * 60 * 60 * 2 }, // 2 hours ago (today)
+    { timestamp: now - 1000 * 60 * 60 * 26 }, // yesterday
+  ];
+  const baths: BathRecord[] = [
+    { timestamp: now - 1000 * 60 * 60 * 24 * 10 }, // 10 days ago
+  ];
+  const weights: WeightRecord[] = [
+    { timestamp: now - 1000 * 60 * 60 * 24 * 30, weightKg: 18.9 },
+    { timestamp: now - 1000 * 60 * 60 * 24 * 7, weightKg: 19.2 },
+    { timestamp: now - 1000 * 60 * 60 * 1, weightKg: 19.1 }, // latest
+  ];
+
+  const value = useMemo<PetContextValue>(() => {
+    const hasFedToday = feedings.some((f) => isSameDay(new Date(f.timestamp), new Date()));
+
+    const lastBathTs = getLatestTimestamp(baths);
+    const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
+
+    const latestWeightTs = getLatestTimestamp(weights);
+    const currentWeightKg = latestWeightTs
+      ? weights.find((w) => w.timestamp === latestWeightTs)?.weightKg ?? null
+      : null;
+
+    return {
+      name: 'Toya',
+      breed: 'Finnish Lapphund',
+      feedings,
+      baths,
+      weights,
+      hasFedToday,
+      lastBathAt,
+      currentWeightKg,
+    };
+  }, [baths, feedings, weights]);
+
+  return <PetContext.Provider value={value}>{children}</PetContext.Provider>;
+}
+
+export function usePet(): PetContextValue {
+  const ctx = useContext(PetContext);
+  if (!ctx) {
+    throw new Error('usePet must be used within a PetProvider');
+  }
+  return ctx;
+}
