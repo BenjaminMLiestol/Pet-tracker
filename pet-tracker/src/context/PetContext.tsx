@@ -27,6 +27,7 @@ export type PetContextValue = {
   setBathedToday: () => void;
   nextBathDueAt: Date | null;
   isBathDueToday: boolean;
+  setWeightToday: (weightKg: number) => void;
 };
 
 const PetContext = createContext<PetContextValue | undefined>(undefined);
@@ -60,11 +61,11 @@ export function PetProvider({ children }: { children: ReactNode }) {
     { timestamp: now - 1000 * 60 * 60 * 24 * 10 }, // 10 days ago
     { timestamp: now - 1000 * 60 * 60 * 24 * 40 }, // ~1 month + 10 days ago
   ]);
-  const weights: WeightRecord[] = [
+  const [weights, setWeights] = useState<WeightRecord[]>([
     { timestamp: now - 1000 * 60 * 60 * 24 * 30, weightKg: 18.9 },
     { timestamp: now - 1000 * 60 * 60 * 24 * 7, weightKg: 19.2 },
     { timestamp: now - 1000 * 60 * 60 * 1, weightKg: 19.1 }, // latest
-  ];
+  ]);
 
   const setFedToday = useCallback((fed: boolean) => {
     setFeedings((prev) => {
@@ -89,6 +90,20 @@ export function PetProvider({ children }: { children: ReactNode }) {
         return next;
       }
       return [{ timestamp: Date.now() }, ...prev];
+    });
+  }, []);
+
+  const setWeightToday = useCallback((weightKg: number) => {
+    if (!Number.isFinite(weightKg) || weightKg <= 0) return;
+    setWeights((prev) => {
+      const today = new Date();
+      const idx = prev.findIndex((r) => isSameDay(new Date(r.timestamp), today));
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], weightKg, timestamp: Date.now() };
+        return next;
+      }
+      return [{ timestamp: Date.now(), weightKg }, ...prev];
     });
   }, []);
 
@@ -124,6 +139,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
       setBathedToday,
       nextBathDueAt,
       isBathDueToday,
+      setWeightToday,
     };
   }, [baths, feedings, weights, setFedToday]);
 
