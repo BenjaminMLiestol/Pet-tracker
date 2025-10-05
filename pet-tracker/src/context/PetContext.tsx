@@ -24,6 +24,9 @@ export type PetContextValue = {
   lastBathAt: Date | null;
   currentWeightKg: number | null;
   setFedToday: (fed: boolean) => void;
+  setBathedToday: () => void;
+  nextBathDueAt: Date | null;
+  isBathDueToday: boolean;
 };
 
 const PetContext = createContext<PetContextValue | undefined>(undefined);
@@ -53,9 +56,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
     { timestamp: now - 1000 * 60 * 60 * 2, fed: true }, // 2 hours ago (today)
     { timestamp: now - 1000 * 60 * 60 * 26, fed: true }, // yesterday
   ]);
-  const baths: BathRecord[] = [
+  const [baths, setBaths] = useState<BathRecord[]>([
     { timestamp: now - 1000 * 60 * 60 * 24 * 10 }, // 10 days ago
-  ];
+    { timestamp: now - 1000 * 60 * 60 * 24 * 40 }, // ~1 month + 10 days ago
+  ]);
   const weights: WeightRecord[] = [
     { timestamp: now - 1000 * 60 * 60 * 24 * 30, weightKg: 18.9 },
     { timestamp: now - 1000 * 60 * 60 * 24 * 7, weightKg: 19.2 },
@@ -75,13 +79,32 @@ export function PetProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setBathedToday = useCallback(() => {
+    setBaths((prev) => {
+      const today = new Date();
+      const idx = prev.findIndex((r) => isSameDay(new Date(r.timestamp), today));
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], timestamp: Date.now() };
+        return next;
+      }
+      return [{ timestamp: Date.now() }, ...prev];
+    });
+  }, []);
+
   const value = useMemo<PetContextValue>(() => {
+    const today = new Date();
     const hasFedToday = feedings.some(
-      (f) => f.fed && isSameDay(new Date(f.timestamp), new Date())
+      (f) => f.fed && isSameDay(new Date(f.timestamp), today)
     );
 
     const lastBathTs = getLatestTimestamp(baths);
     const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
+
+    // Monthly schedule: 30 days after last bath; if none, schedule today
+    const monthMs = 1000 * 60 * 60 * 24 * 30;
+    const nextBathDueAt = lastBathAt ? new Date(lastBathAt.getTime() + monthMs) : today;
+    const isBathDueToday = nextBathDueAt ? isSameDay(today, nextBathDueAt) : false;
 
     const latestWeightTs = getLatestTimestamp(weights);
     const currentWeightKg = latestWeightTs
@@ -98,6 +121,9 @@ export function PetProvider({ children }: { children: ReactNode }) {
       lastBathAt,
       currentWeightKg,
       setFedToday,
+      setBathedToday,
+      nextBathDueAt,
+      isBathDueToday,
     };
   }, [baths, feedings, weights, setFedToday]);
 
