@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, ReactNode, useState, useCallback } from 'react';
+import React, { createContext, useContext, useMemo, ReactNode, useState, useCallback, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type FeedingRecord = {
   timestamp: number; // unix ms
@@ -66,6 +67,41 @@ export function PetProvider({ children }: { children: ReactNode }) {
     { timestamp: now - 1000 * 60 * 60 * 24 * 7, weightKg: 19.2 },
     { timestamp: now - 1000 * 60 * 60 * 1, weightKg: 19.1 }, // latest
   ]);
+
+  const STORAGE_KEY = 'pet-tracker/state/v1';
+
+  // Load persisted state on mount
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Partial<{
+          feedings: FeedingRecord[];
+          baths: BathRecord[];
+          weights: WeightRecord[];
+        }>;
+        if (!isMounted) return;
+        if (Array.isArray(parsed.feedings)) setFeedings(parsed.feedings);
+        if (Array.isArray(parsed.baths)) setBaths(parsed.baths);
+        if (Array.isArray(parsed.weights)) setWeights(parsed.weights);
+      } catch (err) {
+        // Ignore malformed storage; keep seed data
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Persist state whenever it changes
+  useEffect(() => {
+    const state = JSON.stringify({ feedings, baths, weights });
+    AsyncStorage.setItem(STORAGE_KEY, state).catch(() => {
+      // Non-fatal if persistence fails
+    });
+  }, [feedings, baths, weights]);
 
   const setFedToday = useCallback((fed: boolean) => {
     setFeedings((prev) => {

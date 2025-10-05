@@ -12,7 +12,8 @@ export default function WeightScreen() {
   );
 
   const onSave = () => {
-    const val = Number(input);
+    const normalized = input.replace(',', '.');
+    const val = Number(normalized);
     if (!Number.isFinite(val) || val <= 0) return;
     setWeightToday(val);
     setInput('');
