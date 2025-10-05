@@ -8,6 +8,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import FeedingScreen from './src/screens/FeedingScreen';
 import WeightScreen from './src/screens/WeightScreen';
 import BathsScreen from './src/screens/BathsScreen';
+import WalkScreen from './src/screens/WalkScreen';
 import { PetProvider, usePet } from './src/context/PetContext';
 
 const LightTheme: Theme = {
@@ -40,6 +41,7 @@ export default function App() {
               let iconName: keyof typeof Ionicons.glyphMap = 'home-outline';
               if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
               if (route.name === 'Feeding') iconName = focused ? 'fast-food' : 'fast-food-outline';
+              if (route.name === 'Walk') iconName = focused ? 'walk' : 'walk-outline';
               if (route.name === 'Weight') iconName = focused ? 'stats-chart' : 'stats-chart-outline';
               if (route.name === 'Bath') iconName = focused ? 'water' : 'water-outline';
               return <Ionicons name={iconName} size={size} color={color} />;
@@ -48,6 +50,7 @@ export default function App() {
         >
           <Tab.Screen name="Home" component={HomeScreen} />
           <Tab.Screen name="Feeding" component={FeedingScreen} />
+          <Tab.Screen name="Walk" component={WalkScreen} />
           <Tab.Screen name="Weight" component={WeightScreen} />
           <Tab.Screen name="Bath" component={BathsScreen} />
         </Tab.Navigator>
