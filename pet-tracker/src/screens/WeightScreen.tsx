@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Button } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, Button, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { usePet } from '../context/PetContext';
 
 export default function WeightScreen() {
   const { currentWeightKg, weights, setWeightToday } = usePet();
   const [input, setInput] = useState('');
+  const inputRef = useRef<TextInput>(null);
 
   const sorted = useMemo(
     () => [...weights].sort((a, b) => b.timestamp - a.timestamp),
@@ -17,6 +18,9 @@ export default function WeightScreen() {
     if (!Number.isFinite(val) || val <= 0) return;
     setWeightToday(val);
     setInput('');
+    // Ensure input loses focus and keyboard is dismissed
+    inputRef.current?.blur();
+    Keyboard.dismiss();
   };
 
   const maxWeight = Math.max(...sorted.map((w) => w.weightKg), 1);
@@ -24,7 +28,8 @@ export default function WeightScreen() {
   const range = Math.max(1, maxWeight - minWeight);
 
   return (
-    <View style={styles.container}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
       <Text style={styles.title}>Weight</Text>
 
       <View style={styles.card}>
@@ -41,6 +46,10 @@ export default function WeightScreen() {
             onChangeText={setInput}
             keyboardType="numeric"
             style={styles.input}
+            ref={inputRef}
+            blurOnSubmit
+            returnKeyType="done"
+            onSubmitEditing={onSave}
           />
           <Button title="Save" onPress={onSave} />
         </View>
@@ -67,7 +76,8 @@ export default function WeightScreen() {
           </View>
         </View>
       </View>
-    </View>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

@@ -10,6 +10,11 @@ export type BathRecord = {
   timestamp: number; // unix ms
 };
 
+export type WalkRecord = {
+  timestamp: number; // unix ms
+  walked: boolean;
+};
+
 export type WeightRecord = {
   timestamp: number; // unix ms
   weightKg: number;
@@ -20,12 +25,15 @@ export type PetContextValue = {
   breed: string;
   feedings: FeedingRecord[];
   baths: BathRecord[];
+  walks: WalkRecord[];
   weights: WeightRecord[];
   hasFedToday: boolean;
+  hasWalkedToday: boolean;
   lastBathAt: Date | null;
   currentWeightKg: number | null;
   setFedToday: (fed: boolean) => void;
   setBathedToday: () => void;
+  setWalkedToday: (walked: boolean) => void;
   nextBathDueAt: Date | null;
   isBathDueToday: boolean;
   setWeightToday: (weightKg: number) => void;
@@ -62,6 +70,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
     { timestamp: now - 1000 * 60 * 60 * 24 * 10 }, // 10 days ago
     { timestamp: now - 1000 * 60 * 60 * 24 * 40 }, // ~1 month + 10 days ago
   ]);
+  const [walks, setWalks] = useState<WalkRecord[]>([
+    { timestamp: now - 1000 * 60 * 60 * 3, walked: true }, // 3 hours ago (today)
+    { timestamp: now - 1000 * 60 * 60 * 28, walked: true }, // yesterday
+  ]);
   const [weights, setWeights] = useState<WeightRecord[]>([
     { timestamp: now - 1000 * 60 * 60 * 24 * 30, weightKg: 18.9 },
     { timestamp: now - 1000 * 60 * 60 * 24 * 7, weightKg: 19.2 },
@@ -80,11 +92,13 @@ export function PetProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(raw) as Partial<{
           feedings: FeedingRecord[];
           baths: BathRecord[];
+          walks: WalkRecord[];
           weights: WeightRecord[];
         }>;
         if (!isMounted) return;
         if (Array.isArray(parsed.feedings)) setFeedings(parsed.feedings);
         if (Array.isArray(parsed.baths)) setBaths(parsed.baths);
+        if (Array.isArray(parsed.walks)) setWalks(parsed.walks);
         if (Array.isArray(parsed.weights)) setWeights(parsed.weights);
       } catch (err) {
         // Ignore malformed storage; keep seed data
@@ -97,11 +111,11 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
   // Persist state whenever it changes
   useEffect(() => {
-    const state = JSON.stringify({ feedings, baths, weights });
+    const state = JSON.stringify({ feedings, baths, walks, weights });
     AsyncStorage.setItem(STORAGE_KEY, state).catch(() => {
       // Non-fatal if persistence fails
     });
-  }, [feedings, baths, weights]);
+  }, [feedings, baths, walks, weights]);
 
   const setFedToday = useCallback((fed: boolean) => {
     setFeedings((prev) => {
@@ -129,16 +143,23 @@ export function PetProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const setWeightToday = useCallback((weightKg: number) => {
-    if (!Number.isFinite(weightKg) || weightKg <= 0) return;
-    setWeights((prev) => {
+  const setWalkedToday = useCallback((walked: boolean) => {
+    setWalks((prev) => {
       const today = new Date();
       const idx = prev.findIndex((r) => isSameDay(new Date(r.timestamp), today));
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], weightKg, timestamp: Date.now() };
+        next[idx] = { ...next[idx], walked, timestamp: Date.now() };
         return next;
       }
+      return [{ timestamp: Date.now(), walked }, ...prev];
+    });
+  }, []);
+
+  const setWeightToday = useCallback((weightKg: number) => {
+    if (!Number.isFinite(weightKg) || weightKg <= 0) return;
+    setWeights((prev) => {
+      // Always append a new entry instead of updating today's existing record
       return [{ timestamp: Date.now(), weightKg }, ...prev];
     });
   }, []);
@@ -147,6 +168,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
     const today = new Date();
     const hasFedToday = feedings.some(
       (f) => f.fed && isSameDay(new Date(f.timestamp), today)
+    );
+
+    const hasWalkedToday = walks.some(
+      (w) => w.walked && isSameDay(new Date(w.timestamp), today)
     );
 
     const lastBathTs = getLatestTimestamp(baths);
@@ -167,17 +192,20 @@ export function PetProvider({ children }: { children: ReactNode }) {
       breed: 'Finnish Lapphund',
       feedings,
       baths,
+      walks,
       weights,
       hasFedToday,
+      hasWalkedToday,
       lastBathAt,
       currentWeightKg,
       setFedToday,
       setBathedToday,
+      setWalkedToday,
       nextBathDueAt,
       isBathDueToday,
       setWeightToday,
     };
-  }, [baths, feedings, weights, setFedToday]);
+  }, [baths, feedings, walks, weights, setFedToday]);
 
   return <PetContext.Provider value={value}>{children}</PetContext.Provider>;
 }

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { usePet } from '../context/PetContext';
 
 export default function HomeScreen() {
-  const { name, hasFedToday, lastBathAt, currentWeightKg } = usePet();
+  const { name, hasFedToday, hasWalkedToday, lastBathAt, currentWeightKg } = usePet();
 
   const lastBathText = lastBathAt
     ? `${lastBathAt.toLocaleDateString()} (${formatRelativeDays(lastBathAt)})`
@@ -17,6 +17,7 @@ export default function HomeScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Today</Text>
         <Text style={styles.row}><Text style={styles.label}>Fed: </Text>{hasFedToday ? 'Yes' : 'No'}</Text>
+        <Text style={styles.row}><Text style={styles.label}>Walked: </Text>{hasWalkedToday ? 'Yes' : 'No'}</Text>
       </View>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Grooming</Text>
