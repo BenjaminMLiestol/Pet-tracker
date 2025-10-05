@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, ReactNode, useState, useCallback } from 'react';
 
 export type FeedingRecord = {
   timestamp: number; // unix ms
+  fed: boolean; // true if fed, false if skipped/not fed
 };
 
 export type BathRecord = {
@@ -22,6 +23,7 @@ export type PetContextValue = {
   hasFedToday: boolean;
   lastBathAt: Date | null;
   currentWeightKg: number | null;
+  setFedToday: (fed: boolean) => void;
 };
 
 const PetContext = createContext<PetContextValue | undefined>(undefined);
@@ -47,10 +49,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
   const now = Date.now();
 
   // Seed data for demo purposes; in a real app this would come from storage or API
-  const feedings: FeedingRecord[] = [
-    { timestamp: now - 1000 * 60 * 60 * 2 }, // 2 hours ago (today)
-    { timestamp: now - 1000 * 60 * 60 * 26 }, // yesterday
-  ];
+  const [feedings, setFeedings] = useState<FeedingRecord[]>([
+    { timestamp: now - 1000 * 60 * 60 * 2, fed: true }, // 2 hours ago (today)
+    { timestamp: now - 1000 * 60 * 60 * 26, fed: true }, // yesterday
+  ]);
   const baths: BathRecord[] = [
     { timestamp: now - 1000 * 60 * 60 * 24 * 10 }, // 10 days ago
   ];
@@ -60,8 +62,23 @@ export function PetProvider({ children }: { children: ReactNode }) {
     { timestamp: now - 1000 * 60 * 60 * 1, weightKg: 19.1 }, // latest
   ];
 
+  const setFedToday = useCallback((fed: boolean) => {
+    setFeedings((prev) => {
+      const today = new Date();
+      const idx = prev.findIndex((r) => isSameDay(new Date(r.timestamp), today));
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], fed, timestamp: Date.now() };
+        return next;
+      }
+      return [{ timestamp: Date.now(), fed }, ...prev];
+    });
+  }, []);
+
   const value = useMemo<PetContextValue>(() => {
-    const hasFedToday = feedings.some((f) => isSameDay(new Date(f.timestamp), new Date()));
+    const hasFedToday = feedings.some(
+      (f) => f.fed && isSameDay(new Date(f.timestamp), new Date())
+    );
 
     const lastBathTs = getLatestTimestamp(baths);
     const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
@@ -80,8 +97,9 @@ export function PetProvider({ children }: { children: ReactNode }) {
       hasFedToday,
       lastBathAt,
       currentWeightKg,
+      setFedToday,
     };
-  }, [baths, feedings, weights]);
+  }, [baths, feedings, weights, setFedToday]);
 
   return <PetContext.Provider value={value}>{children}</PetContext.Provider>;
 }
