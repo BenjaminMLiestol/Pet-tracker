@@ -25,7 +25,7 @@ export default function WalkScreen() {
         <Text style={styles.cardTitle}>History</Text>
         <FlatList
           data={sorted}
-          keyExtractor={(item, index) => `${item.timestamp}-${index}`}
+          keyExtractor={(item, index) => String(item.id ?? `${item.timestamp}-${index}`)}
           renderItem={({ item }) => (
             <View style={styles.listRow}>
               <Text style={styles.listRowTitle}>{new Date(item.timestamp).toLocaleString()}</Text>

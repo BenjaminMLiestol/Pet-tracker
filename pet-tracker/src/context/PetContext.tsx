@@ -1,24 +1,21 @@
-import React, { createContext, useContext, useMemo, ReactNode, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useMemo, type ReactNode, useState, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiFetch } from '../api/client';
+import { useAuth } from './AuthContext';
 
+// ===== Types expected by the rest of the app =====
 export type FeedingRecord = {
-  timestamp: number; // unix ms
-  fed: boolean; // true if fed, false if skipped/not fed
+  id: number;
+  timestamp: number;
+  fed: boolean;
 };
-
-export type BathRecord = {
-  timestamp: number; // unix ms
-};
-
+export type BathRecord = { timestamp: number };
 export type WalkRecord = {
-  timestamp: number; // unix ms
+  id: number;
+  timestamp: number;
   walked: boolean;
 };
-
-export type WeightRecord = {
-  timestamp: number; // unix ms
-  weightKg: number;
-};
+export type WeightRecord = { timestamp: number; weightKg: number };
 
 export type PetContextValue = {
   name: string;
@@ -31,165 +28,278 @@ export type PetContextValue = {
   hasWalkedToday: boolean;
   lastBathAt: Date | null;
   currentWeightKg: number | null;
-  setFedToday: (fed: boolean) => void;
-  setBathedToday: () => void;
-  setWalkedToday: (walked: boolean) => void;
+  setFedToday: (fed: boolean) => Promise<void>;
+  setBathedToday: () => Promise<void>;
+  setWalkedToday: (walked: boolean) => Promise<void>;
   nextBathDueAt: Date | null;
   isBathDueToday: boolean;
-  setWeightToday: (weightKg: number) => void;
+  setWeightToday: (weightKg: number) => Promise<void>;
 };
 
 const PetContext = createContext<PetContextValue | undefined>(undefined);
 
+// ===== Backend API shapes =====
+type ApiPet = { id: number; name: string; age?: number | null; breed?: string | null };
+type ApiFeeding = { id: number; feed_check: boolean; fed_at: string; pet_id: number; user_id: number };
+type ApiWalk = { id: number; walk_check: boolean; walked_at: string; pet_id: number; user_id: number };
+type ApiBath = { id: number; bathed_at: string; pet_id: number; user_id: number };
+type ApiWeight = { id: number; value: number; weighed_at: string; pet_id: number; user_id: number };
+
+// Some endpoints may be paginated (Laravel's apiResource with paginate()).
+// Accept either an array or { data: [...] }.
+function unwrapList<T>(res: T[] | { data: T[] }): T[] {
+  return Array.isArray(res) ? res : res?.data ?? [];
+}
+
 function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 function getLatestTimestamp<T extends { timestamp: number }>(items: T[]): number | null {
   if (items.length === 0) return null;
   let max = items[0].timestamp;
-  for (let i = 1; i < items.length; i += 1) {
-    if (items[i].timestamp > max) max = items[i].timestamp;
-  }
+  for (let i = 1; i < items.length; i += 1) if (items[i].timestamp > max) max = items[i].timestamp;
   return max;
 }
 
+const STORAGE_PET_ID = 'pet-tracker/active-pet-id';
+
 export function PetProvider({ children }: { children: ReactNode }) {
-  const now = Date.now();
+  const { token } = useAuth();
 
-  // Seed data for demo purposes; in a real app this would come from storage or API
-  const [feedings, setFeedings] = useState<FeedingRecord[]>([
-    { timestamp: now - 1000 * 60 * 60 * 2, fed: true }, // 2 hours ago (today)
-    { timestamp: now - 1000 * 60 * 60 * 26, fed: true }, // yesterday
-  ]);
-  const [baths, setBaths] = useState<BathRecord[]>([
-    { timestamp: now - 1000 * 60 * 60 * 24 * 10 }, // 10 days ago
-    { timestamp: now - 1000 * 60 * 60 * 24 * 40 }, // ~1 month + 10 days ago
-  ]);
-  const [walks, setWalks] = useState<WalkRecord[]>([
-    { timestamp: now - 1000 * 60 * 60 * 3, walked: true }, // 3 hours ago (today)
-    { timestamp: now - 1000 * 60 * 60 * 28, walked: true }, // yesterday
-  ]);
-  const [weights, setWeights] = useState<WeightRecord[]>([
-    { timestamp: now - 1000 * 60 * 60 * 24 * 30, weightKg: 18.9 },
-    { timestamp: now - 1000 * 60 * 60 * 24 * 7, weightKg: 19.2 },
-    { timestamp: now - 1000 * 60 * 60 * 1, weightKg: 19.1 }, // latest
-  ]);
+  // Active pet metadata
+  const [pet, setPet] = useState<ApiPet | null>(null);
 
-  const STORAGE_KEY = 'pet-tracker/state/v1';
+  // Activity state from backend
+  const [feedings, setFeedings] = useState<FeedingRecord[]>([]);
+  const [baths, setBaths] = useState<BathRecord[]>([]);
+  const [walks, setWalks] = useState<WalkRecord[]>([]);
+  const [weights, setWeights] = useState<WeightRecord[]>([]);
 
-  // Load persisted state on mount
+  // ---- Bootstrap: pick active pet, then load activity ----
   useEffect(() => {
-    let isMounted = true;
+    if (!token) {
+      // Logged out → reset local state
+      setPet(null);
+      setFeedings([]);
+      setBaths([]);
+      setWalks([]);
+      setWeights([]);
+      return;
+    }
+
+    let cancelled = false;
+
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as Partial<{
-          feedings: FeedingRecord[];
-          baths: BathRecord[];
-          walks: WalkRecord[];
-          weights: WeightRecord[];
-        }>;
-        if (!isMounted) return;
-        if (Array.isArray(parsed.feedings)) setFeedings(parsed.feedings);
-        if (Array.isArray(parsed.baths)) setBaths(parsed.baths);
-        if (Array.isArray(parsed.walks)) setWalks(parsed.walks);
-        if (Array.isArray(parsed.weights)) setWeights(parsed.weights);
-      } catch (err) {
-        // Ignore malformed storage; keep seed data
+        // 1) Load pets
+        const petsRes = await apiFetch<ApiPet[] | { data: ApiPet[] }>('/pets');
+        const pets = unwrapList<ApiPet>(petsRes);
+        if (pets.length === 0) {
+          if (!cancelled) setPet(null);
+          return;
+        }
+
+        // 2) Select active pet (persist between sessions)
+        const storedId = await AsyncStorage.getItem(STORAGE_PET_ID);
+        const selected = pets.find(p => String(p.id) === storedId) ?? pets[0];
+        if (!cancelled) {
+          setPet(selected);
+          if (String(selected.id) !== storedId) await AsyncStorage.setItem(STORAGE_PET_ID, String(selected.id));
+        }
+
+        // 3) Load activities for active pet
+        const petId = selected.id;
+        const [feedingsRaw, walksRaw, bathsRaw, weightsRaw] = await Promise.all([
+          apiFetch<ApiFeeding[] | { data: ApiFeeding[] }>(`/feedings?pet_id=${petId}`),
+          apiFetch<ApiWalk[] | { data: ApiWalk[] }>(`/walks?pet_id=${petId}`),
+          apiFetch<ApiBath[] | { data: ApiBath[] }>(`/baths?pet_id=${petId}`),
+          apiFetch<ApiWeight[] | { data: ApiWeight[] }>(`/weights?pet_id=${petId}`),
+        ]);
+
+        if (cancelled) return;
+
+       setFeedings(
+  unwrapList(feedingsRaw)
+    .map(f => ({
+      id: f.id, // <-- keep id
+      timestamp: Date.parse(f.fed_at),
+      fed: !!f.feed_check,
+    }))
+    .sort((a, b) => b.timestamp - a.timestamp)
+);
+
+    setWalks(
+  unwrapList(walksRaw)
+    .map(w => ({
+      id: w.id, // <-- keep id
+      timestamp: Date.parse(w.walked_at),
+      walked: !!w.walk_check,
+    }))
+    .sort((a, b) => b.timestamp - a.timestamp)
+);
+
+        setBaths(
+          unwrapList(bathsRaw)
+            .map(b => ({ timestamp: Date.parse(b.bathed_at) }))
+            .sort((a, b) => b.timestamp - a.timestamp)
+        );
+
+        setWeights(
+          unwrapList(weightsRaw)
+            .map(w => ({ timestamp: Date.parse(w.weighed_at), weightKg: Number(w.value) }))
+            .sort((a, b) => b.timestamp - a.timestamp)
+        );
+      } catch (e) {
+        // Network/API errors should be surfaced in UI if desired.
+        // For now we keep the state empty; consumers can decide how to handle.
+        console.warn('Failed to load pet data', e);
       }
     })();
+
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
-  }, []);
+  }, [token]);
 
-  // Persist state whenever it changes
-  useEffect(() => {
-    const state = JSON.stringify({ feedings, baths, walks, weights });
-    AsyncStorage.setItem(STORAGE_KEY, state).catch(() => {
-      // Non-fatal if persistence fails
-    });
-  }, [feedings, baths, walks, weights]);
+  // ---- Mutations: call API then update local cache ----
+const setFedToday = useCallback(
+  async (fed: boolean) => {
+    if (!pet) return;
 
-  const setFedToday = useCallback((fed: boolean) => {
-    setFeedings((prev) => {
-      const today = new Date();
-      const idx = prev.findIndex((r) => isSameDay(new Date(r.timestamp), today));
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], fed, timestamp: Date.now() };
-        return next;
+    const nowIso = new Date().toISOString();
+    const today = new Date();
+
+    // Find today's feedings (if any)
+    const todays = feedings
+      .filter(f => isSameDay(new Date(f.timestamp), today))
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    const latestToday = todays[0];
+
+    if (fed) {
+      // If we already have a record today, PATCH it to fed=true (upsert-like)
+      if (latestToday) {
+        await apiFetch(`/feedings/${latestToday.id}`, {
+          method: 'PATCH',
+          body: { feed_check: true, fed_at: nowIso },
+        });
+        setFeedings(prev =>
+          prev.map(f =>
+            f.id === latestToday.id ? { ...f, fed: true, timestamp: Date.parse(nowIso) } : f
+          )
+        );
+      } else {
+        // No record today → create one
+        const created = await apiFetch<{ id: number; fed_at: string; feed_check: boolean }>(
+          '/feedings',
+          { method: 'POST', body: { pet_id: pet.id, feed_check: true, fed_at: nowIso } }
+        );
+        setFeedings(prev => [
+          {
+            id: created.id,
+            fed: true,
+            timestamp: Date.parse(created.fed_at ?? nowIso),
+          },
+          ...prev,
+        ]);
       }
-      return [{ timestamp: Date.now(), fed }, ...prev];
-    });
-  }, []);
+    } else {
+      // fed === false → DELETE today’s latest feeding if exists
+      if (!latestToday) return;
+      await apiFetch(`/feedings/${latestToday.id}`, { method: 'DELETE' });
+      setFeedings(prev => prev.filter(f => f.id !== latestToday.id));
+    }
+  },
+  [pet, feedings]
+);
+  
 
-  const setBathedToday = useCallback(() => {
-    setBaths((prev) => {
-      const today = new Date();
-      const idx = prev.findIndex((r) => isSameDay(new Date(r.timestamp), today));
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], timestamp: Date.now() };
-        return next;
+  const setBathedToday = useCallback(async () => {
+    if (!pet) return;
+    const nowIso = new Date().toISOString();
+    await apiFetch('/baths', {
+      method: 'POST',
+      body: { pet_id: pet.id, bathed_at: nowIso },
+    });
+    setBaths(prev => [{ timestamp: Date.parse(nowIso) }, ...prev]);
+  }, [pet]);
+
+const setWalkedToday = useCallback(
+  async (walked: boolean) => {
+    if (!pet) return;
+    const nowIso = new Date().toISOString();
+    const today = new Date();
+
+    const todays = walks
+      .filter(w => isSameDay(new Date(w.timestamp), today))
+      .sort((a, b) => b.timestamp - a.timestamp);
+    const latestToday = todays[0];
+
+    if (walked) {
+      if (latestToday) {
+        // Update existing today entry
+        await apiFetch(`/walks/${latestToday.id}`, {
+          method: 'PATCH',
+          body: { walk_check: true, walked_at: nowIso },
+        });
+        setWalks(prev =>
+          prev.map(w =>
+            w.id === latestToday.id ? { ...w, walked: true, timestamp: Date.parse(nowIso) } : w
+          )
+        );
+      } else {
+        // Create new today entry
+        const created = await apiFetch<{ id: number; walked_at: string; walk_check: boolean }>(
+          '/walks',
+          { method: 'POST', body: { pet_id: pet.id, walk_check: true, walked_at: nowIso } }
+        );
+        setWalks(prev => [
+          { id: created.id, walked: true, timestamp: Date.parse(created.walked_at ?? nowIso) },
+          ...prev,
+        ]);
       }
-      return [{ timestamp: Date.now() }, ...prev];
-    });
-  }, []);
+    } else {
+      if (!latestToday) return; // nothing to delete
+      await apiFetch(`/walks/${latestToday.id}`, { method: 'DELETE' });
+      setWalks(prev => prev.filter(w => w.id !== latestToday.id));
+    }
+  },
+  [pet, walks]
+);
 
-  const setWalkedToday = useCallback((walked: boolean) => {
-    setWalks((prev) => {
-      const today = new Date();
-      const idx = prev.findIndex((r) => isSameDay(new Date(r.timestamp), today));
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], walked, timestamp: Date.now() };
-        return next;
-      }
-      return [{ timestamp: Date.now(), walked }, ...prev];
+  const setWeightToday = useCallback(async (weightKg: number) => {
+    if (!pet || !Number.isFinite(weightKg) || weightKg <= 0) return;
+    const nowIso = new Date().toISOString();
+    await apiFetch('/weights', {
+      method: 'POST',
+      body: { pet_id: pet.id, value: weightKg, weighed_at: nowIso },
     });
-  }, []);
+    setWeights(prev => [{ timestamp: Date.parse(nowIso), weightKg }, ...prev]);
+  }, [pet]);
 
-  const setWeightToday = useCallback((weightKg: number) => {
-    if (!Number.isFinite(weightKg) || weightKg <= 0) return;
-    setWeights((prev) => {
-      // Always append a new entry instead of updating today's existing record
-      return [{ timestamp: Date.now(), weightKg }, ...prev];
-    });
-  }, []);
-
+  // ---- Derived values (same as your original API) ----
   const value = useMemo<PetContextValue>(() => {
     const today = new Date();
-    const hasFedToday = feedings.some(
-      (f) => f.fed && isSameDay(new Date(f.timestamp), today)
-    );
 
-    const hasWalkedToday = walks.some(
-      (w) => w.walked && isSameDay(new Date(w.timestamp), today)
-    );
+    const hasFedToday = feedings.some(f => f.fed && isSameDay(new Date(f.timestamp), today));
+    const hasWalkedToday = walks.some(w => w.walked && isSameDay(new Date(w.timestamp), today));
 
     const lastBathTs = getLatestTimestamp(baths);
     const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
 
-    // Monthly schedule: 30 days after last bath; if none, schedule today
     const monthMs = 1000 * 60 * 60 * 24 * 30;
     const nextBathDueAt = lastBathAt ? new Date(lastBathAt.getTime() + monthMs) : today;
     const isBathDueToday = nextBathDueAt ? isSameDay(today, nextBathDueAt) : false;
 
     const latestWeightTs = getLatestTimestamp(weights);
     const currentWeightKg = latestWeightTs
-      ? weights.find((w) => w.timestamp === latestWeightTs)?.weightKg ?? null
+      ? weights.find(w => w.timestamp === latestWeightTs)?.weightKg ?? null
       : null;
 
     return {
-      name: 'Toya',
-      breed: 'Finnish Lapphund',
+      name: pet?.name ?? '',
+      breed: pet?.breed ?? '',
       feedings,
       baths,
       walks,
@@ -205,15 +315,13 @@ export function PetProvider({ children }: { children: ReactNode }) {
       isBathDueToday,
       setWeightToday,
     };
-  }, [baths, feedings, walks, weights, setFedToday]);
+  }, [pet, baths, feedings, walks, weights, setFedToday, setBathedToday, setWalkedToday, setWeightToday]);
 
   return <PetContext.Provider value={value}>{children}</PetContext.Provider>;
 }
 
 export function usePet(): PetContextValue {
   const ctx = useContext(PetContext);
-  if (!ctx) {
-    throw new Error('usePet must be used within a PetProvider');
-  }
+  if (!ctx) throw new Error('usePet must be used within a PetProvider');
   return ctx;
 }
