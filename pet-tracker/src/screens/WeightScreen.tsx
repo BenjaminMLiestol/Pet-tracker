@@ -23,9 +23,7 @@ export default function WeightScreen() {
     Keyboard.dismiss();
   };
 
-  const maxWeight = Math.max(...sorted.map((w) => w.weightKg), 1);
-  const minWeight = Math.min(...sorted.map((w) => w.weightKg), 0);
-  const range = Math.max(1, maxWeight - minWeight);
+  // Grid view does not require computed range
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -57,23 +55,17 @@ export default function WeightScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>History</Text>
-        <View style={styles.chartContainer}>
-          <View style={styles.chartBars}>
-            {sorted.length === 0 ? (
-              <Text style={styles.helperText}>No data yet</Text>
-            ) : (
-              sorted.slice(0, 10).map((w, idx) => {
-                const relative = (w.weightKg - minWeight) / range;
-                const height = 16 + Math.round(relative * 84); // 16-100 px
-                return (
-                  <View key={`${w.timestamp}-${idx}`} style={styles.barWrapper}>
-                    <View style={[styles.bar, { height }]} />
-                    <Text style={styles.barLabel}>{w.weightKg.toFixed(1)}</Text>
-                  </View>
-                );
-              })
-            )}
-          </View>
+        <View style={styles.grid}>
+          {sorted.length === 0 ? (
+            <Text style={styles.helperText}>No data yet</Text>
+          ) : (
+            sorted.slice(0, 12).map((w, idx) => (
+              <View key={`${w.timestamp}-${idx}`} style={styles.tile}>
+                <Text style={styles.tileValue}>{w.weightKg.toFixed(1)} kg</Text>
+                <Text style={styles.tileDate}>{new Date(w.timestamp).toLocaleDateString()}</Text>
+              </View>
+            ))
+          )}
         </View>
       </View>
       </View>
@@ -130,28 +122,29 @@ const styles = StyleSheet.create({
     marginRight: 8,
     backgroundColor: 'white',
   },
-  chartContainer: {
-    height: 140,
-  },
-  chartBars: {
-    flex: 1,
+  grid: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
-  barWrapper: {
-    width: 36,
-    alignItems: 'center',
-    marginRight: 8,
+  tile: {
+    width: '48%',
+    backgroundColor: '#ecfeff',
+    borderColor: '#bae6fd',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
   },
-  bar: {
-    width: 26,
-    backgroundColor: '#34d399',
-    borderRadius: 6,
+  tileValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f766e',
+    marginBottom: 4,
   },
-  barLabel: {
-    marginTop: 6,
+  tileDate: {
     fontSize: 12,
-    color: '#111827',
+    color: '#374151',
   },
   helperText: {
     color: '#6b7280',
