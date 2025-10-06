@@ -1,16 +1,43 @@
 import React from "react";
-import { View, Text, StyleSheet, Image } from "react-native";
+import {
+	View,
+	Text,
+	StyleSheet,
+	Image,
+	ScrollView,
+	RefreshControl,
+} from "react-native";
 import { usePet } from "../context/PetContext";
+import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
+import { useIsFocused } from "@react-navigation/native";
 
 export default function HomeScreen() {
 	const { t, i18n } = useTranslation();
+	const isFocused = useIsFocused();
 	const DOG_IMG = require("../../assets/dog.png");
-	const { name, hasFedToday, hasWalkedToday, lastBathAt, currentWeightKg } =
-		usePet();
 
+	const {
+		hasFedToday,
+		hasWalkedToday,
+		lastBathAt,
+		currentWeightKg,
+		refresh,
+		refreshing,
+	} = usePet();
+	const { user } = useAuth();
+
+	// Use user's name (fallback to email or a friendly label)
+	const displayName =
+		user?.first_name || user?.last_name
+			? `${user?.first_name ?? ""}`.trim()
+			: (user?.email ?? t("friend"));
+
+	const df = new Intl.DateTimeFormat(
+		i18n.language === "nb" ? "nb-NO" : "en-US",
+	);
 	const lastBathText = lastBathAt
-		? `${new Intl.DateTimeFormat(i18n.language === "nb" ? "nb-NO" : "en-US").format(lastBathAt)} (${formatRelativeDays(lastBathAt, t)})`
+		? `${df.format(lastBathAt)} (${formatRelativeDays(lastBathAt, t, i18n.language)})`
 		: t("not_recorded");
 
 	const weightText =
@@ -22,8 +49,18 @@ export default function HomeScreen() {
 	const aspectRatio = imgW && imgH ? imgW / imgH : 16 / 9;
 
 	return (
-		<View style={styles.container}>
-			<Text style={styles.title}>{t("greeting", { name })}</Text>
+		<ScrollView
+			style={styles.screen}
+			contentContainerStyle={styles.content}
+			refreshControl={
+				<RefreshControl
+					refreshing={isFocused && refreshing}
+					onRefresh={refresh}
+				/>
+			}
+			alwaysBounceVertical
+		>
+			<Text style={styles.title}>{t("greeting", { name: displayName })}</Text>
 
 			<View style={styles.card}>
 				<Text style={styles.cardTitle}>{t("today")}</Text>
@@ -57,41 +94,42 @@ export default function HomeScreen() {
 				<Image
 					source={DOG_IMG}
 					style={[styles.heroImage, { aspectRatio }]}
-					// 'cover' will nicely crop wide/tall images into the rounded frame
 					resizeMode="cover"
 					accessible
-					accessibilityLabel="Dog"
+					accessibilityLabel={t("dog_image_alt", { defaultValue: "Dog" })}
 				/>
 			</View>
-		</View>
+		</ScrollView>
 	);
 }
 
 function formatRelativeDays(
 	date: Date,
 	t: (k: string, o?: any) => string,
+	lang: string,
 ): string {
 	const msPerDay = 1000 * 60 * 60 * 24;
 	const diff = Date.now() - date.getTime();
 	const days = Math.floor(diff / msPerDay);
 	if (days === 0) return t("today");
 	if (days === 1)
-		return i18nExistsNorwegian() ? "for 1 dag siden" : "1 day ago";
-	return i18nExistsNorwegian() ? `for ${days} dager siden` : `${days} days ago`;
-}
-function i18nExistsNorwegian() {
-	// quick helper; you can pass i18n.language in if preferred
-	return true; // default nb; keep simple
+		return lang.startsWith("nb") ? "for 1 dag siden" : "1 day ago";
+	return lang.startsWith("nb") ? `for ${days} dager siden` : `${days} days ago`;
 }
 
 const styles = StyleSheet.create({
-	container: {
+	// ScrollView container
+	screen: {
 		flex: 1,
-		alignItems: "stretch",
-		justifyContent: "flex-start",
-		padding: 16,
 		backgroundColor: "#fff",
 	},
+	// Inner layout for ScrollView
+	content: {
+		padding: 16,
+		alignItems: "stretch",
+		justifyContent: "flex-start",
+	},
+
 	title: {
 		fontSize: 24,
 		fontWeight: "600",
@@ -119,13 +157,12 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 
-	/* --- New styles for the image --- */
+	/* --- Image styles --- */
 	heroImageWrap: {
 		marginTop: 12,
 		borderRadius: 16,
 		overflow: "hidden",
 		backgroundColor: "#f3f4f6",
-		// subtle shadow
 		shadowColor: "#000",
 		shadowOpacity: 0.08,
 		shadowRadius: 8,
@@ -134,8 +171,8 @@ const styles = StyleSheet.create({
 	},
 	heroImage: {
 		width: "100%",
-		height: undefined, // let aspectRatio compute height from width
-		minHeight: 160, // keep a nice presence on small screens
-		maxHeight: 300, // don’t get too tall on tablets
+		height: undefined, // height derived from aspectRatio
+		minHeight: 160,
+		maxHeight: 300,
 	},
 });

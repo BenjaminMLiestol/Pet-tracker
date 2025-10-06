@@ -1,11 +1,27 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, Button } from "react-native";
+import {
+	View,
+	Text,
+	StyleSheet,
+	Button,
+	ScrollView,
+	RefreshControl,
+} from "react-native";
 import { usePet } from "../context/PetContext";
 import { useTranslation } from "react-i18next";
+import { useIsFocused } from "@react-navigation/native";
 
 export default function BathsScreen() {
 	const { t, i18n } = useTranslation();
-	const { baths, nextBathDueAt, isBathDueToday, setBathedToday } = usePet();
+	const {
+		baths,
+		nextBathDueAt,
+		isBathDueToday,
+		setBathedToday,
+		refresh,
+		refreshing,
+	} = usePet();
+	const isFocused = useIsFocused();
 
 	const sorted = useMemo(
 		() => [...baths].sort((a, b) => b.timestamp - a.timestamp),
@@ -32,7 +48,17 @@ export default function BathsScreen() {
 		: t("not_recorded");
 
 	return (
-		<View style={styles.container}>
+		<ScrollView
+			style={styles.screen}
+			contentContainerStyle={styles.content}
+			refreshControl={
+				<RefreshControl
+					refreshing={isFocused && refreshing}
+					onRefresh={refresh}
+				/>
+			}
+			alwaysBounceVertical
+		>
 			<Text style={styles.title}>{t("baths_title")}</Text>
 
 			<View style={styles.card}>
@@ -55,10 +81,10 @@ export default function BathsScreen() {
 						{intervalsDays.length === 0 ? (
 							<Text style={styles.helperText}>{t("not_enough_data")}</Text>
 						) : (
-							intervalsDays.map((d) => {
+							intervalsDays.map((d, idx) => {
 								const height = 16 + Math.round((d / maxInterval) * 84);
 								return (
-									<View key={d} style={styles.barWrapper}>
+									<View key={`${d}-${idx}`} style={styles.barWrapper}>
 										<View style={[styles.bar, { height }]} />
 										<Text style={styles.barLabel}>{d}</Text>
 									</View>
@@ -68,18 +94,23 @@ export default function BathsScreen() {
 					</View>
 				</View>
 			</View>
-		</View>
+		</ScrollView>
 	);
 }
 
 const styles = StyleSheet.create({
-	container: {
+	// ScrollView container
+	screen: {
 		flex: 1,
-		alignItems: "stretch",
-		justifyContent: "flex-start",
-		padding: 16,
 		backgroundColor: "#fff",
 	},
+	// Inner layout for ScrollView
+	content: {
+		padding: 16,
+		alignItems: "stretch",
+		justifyContent: "flex-start",
+	},
+
 	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
 	card: {
 		backgroundColor: "#f9fafb",

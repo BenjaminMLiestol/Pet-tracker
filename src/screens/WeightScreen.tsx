@@ -7,15 +7,20 @@ import {
 	Button,
 	Keyboard,
 	TouchableWithoutFeedback,
+	ScrollView,
+	RefreshControl,
 } from "react-native";
 import { usePet } from "../context/PetContext";
 import { useTranslation } from "react-i18next";
+import { useIsFocused } from "@react-navigation/native";
 
 export default function WeightScreen() {
 	const { t, i18n } = useTranslation();
-	const { currentWeightKg, weights, setWeightToday } = usePet();
+	const { currentWeightKg, weights, setWeightToday, refresh, refreshing } =
+		usePet();
 	const [input, setInput] = useState("");
 	const inputRef = useRef<TextInput>(null);
+	const isFocused = useIsFocused();
 
 	const sorted = useMemo(
 		() => [...weights].sort((a, b) => b.timestamp - a.timestamp),
@@ -38,7 +43,18 @@ export default function WeightScreen() {
 
 	return (
 		<TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-			<View style={styles.container}>
+			<ScrollView
+				style={styles.screen} // <-- only container bg/flex here
+				contentContainerStyle={styles.content} // <-- layout/padding belong here
+				refreshControl={
+					<RefreshControl
+						refreshing={isFocused && refreshing}
+						onRefresh={refresh}
+					/>
+				}
+				keyboardShouldPersistTaps="handled"
+				alwaysBounceVertical
+			>
 				<Text style={styles.title}>{t("weight_title")}</Text>
 
 				<View style={styles.card}>
@@ -88,19 +104,24 @@ export default function WeightScreen() {
 						)}
 					</View>
 				</View>
-			</View>
+			</ScrollView>
 		</TouchableWithoutFeedback>
 	);
 }
 
 const styles = StyleSheet.create({
-	container: {
+	// Use this for the ScrollView itself (container)
+	screen: {
 		flex: 1,
-		alignItems: "stretch",
-		justifyContent: "flex-start",
-		padding: 16,
 		backgroundColor: "#fff",
 	},
+	// Use this for layout & padding inside the ScrollView
+	content: {
+		padding: 16,
+		alignItems: "stretch",
+		justifyContent: "flex-start",
+	},
+
 	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
 	card: {
 		backgroundColor: "#f9fafb",

@@ -1,73 +1,109 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { usePet } from '../context/PetContext';
-import LanguageSwitcher from '../components/LanguageSwitcher';
-import { useTranslation } from 'react-i18next';
+import React from "react";
+import {
+	View,
+	Text,
+	StyleSheet,
+	ScrollView,
+	RefreshControl,
+} from "react-native";
+import { useAuth } from "../context/AuthContext";
+import { usePet } from "../context/PetContext";
+import LanguageSwitcher from "../components/LanguageSwitcher";
+import { useTranslation } from "react-i18next";
+import { useIsFocused } from "@react-navigation/native";
 
 export default function ProfileScreen() {
-  const { t, i18n } = useTranslation();
-  const { user } = useAuth();
-  const { name: petName, breed, currentWeightKg, lastBathAt } = usePet();
+	const { t, i18n } = useTranslation();
+	const { user } = useAuth();
+	const {
+		name: petName,
+		breed,
+		currentWeightKg,
+		lastBathAt,
+		refresh,
+		refreshing,
+	} = usePet();
+	const isFocused = useIsFocused();
 
-  const fullName = user ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() : '';
+	const fullName = user
+		? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
+		: "";
+	const weightText =
+		currentWeightKg != null ? `${currentWeightKg.toFixed(1)} kg` : "—";
 
-  const weightText = currentWeightKg != null ? `${currentWeightKg.toFixed(1)} kg` : '—';
+	const formatter = new Intl.DateTimeFormat(
+		i18n.language === "nb" ? "nb-NO" : "en-US",
+	);
+	const lastBathText = lastBathAt ? formatter.format(lastBathAt) : "—";
 
-  const formatter = new Intl.DateTimeFormat(i18n.language === 'nb' ? 'nb-NO' : 'en-US');
-  const lastBathText = lastBathAt ? formatter.format(lastBathAt) : '—';
+	return (
+		<ScrollView
+			style={styles.screen}
+			contentContainerStyle={styles.content}
+			refreshControl={
+				<RefreshControl
+					refreshing={isFocused && refreshing}
+					onRefresh={refresh}
+				/>
+			}
+			alwaysBounceVertical
+		>
+			<Text style={styles.title}>{t("profile_title")}</Text>
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{t('profile_title')}</Text>
+			<View style={styles.card}>
+				<Text style={styles.cardTitle}>{t("account")}</Text>
+				<Text style={styles.row}>
+					<Text style={styles.label}>{t("name")}: </Text>
+					{fullName || "—"}
+				</Text>
+				<Text style={styles.row}>
+					<Text style={styles.label}>{t("email")}: </Text>
+					{user?.email ?? "—"}
+				</Text>
+			</View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('account')}</Text>
-        <Text style={styles.row}>
-          <Text style={styles.label}>{t('name')}: </Text>{fullName || '—'}
-        </Text>
-        <Text style={styles.row}>
-          <Text style={styles.label}>{t('email')}: </Text>{user?.email ?? '—'}
-        </Text>
-      </View>
+			<View style={styles.card}>
+				<Text style={styles.cardTitle}>{t("pet")}</Text>
+				<Text style={styles.row}>
+					<Text style={styles.label}>{t("name")}: </Text>
+					{petName || "—"}
+				</Text>
+				<Text style={styles.row}>
+					<Text style={styles.label}>{t("breed")}: </Text>
+					{breed || "—"}
+				</Text>
+				<Text style={styles.row}>
+					<Text style={styles.label}>{t("current_weight_short")}: </Text>
+					{weightText}
+				</Text>
+				<Text style={styles.row}>
+					<Text style={styles.label}>{t("last_bath_short")}: </Text>
+					{lastBathText}
+				</Text>
+			</View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('pet')}</Text>
-        <Text style={styles.row}>
-          <Text style={styles.label}>{t('name')}: </Text>{petName || '—'}
-        </Text>
-        <Text style={styles.row}>
-          <Text style={styles.label}>{t('breed')}: </Text>{breed || '—'}
-        </Text>
-        <Text style={styles.row}>
-          <Text style={styles.label}>{t('current_weight_short')}: </Text>{weightText}
-        </Text>
-        <Text style={styles.row}>
-          <Text style={styles.label}>{t('last_bath_short')}: </Text>{lastBathText}
-        </Text>
-      </View>
-
-      {/* Language card */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('language')}</Text>
-        <LanguageSwitcher />
-      </View>
-    </View>
-  );
+			<View style={styles.card}>
+				<Text style={styles.cardTitle}>{t("language")}</Text>
+				<LanguageSwitcher />
+			</View>
+		</ScrollView>
+	);
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'stretch', padding: 16, backgroundColor: '#fff' },
-  title: { fontSize: 24, fontWeight: '600', marginBottom: 16 },
-  card: {
-    backgroundColor: '#f9fafb',
-    borderColor: '#e5e7eb',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  row: { fontSize: 16, marginBottom: 6 },
-  label: { color: '#374151', fontWeight: '600' },
+	screen: { flex: 1, backgroundColor: "#fff" },
+	content: { padding: 16, alignItems: "stretch", justifyContent: "flex-start" },
+
+	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
+	card: {
+		backgroundColor: "#f9fafb",
+		borderColor: "#e5e7eb",
+		borderWidth: 1,
+		borderRadius: 12,
+		padding: 16,
+		marginBottom: 12,
+	},
+	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
+	row: { fontSize: 16, marginBottom: 6 },
+	label: { color: "#374151", fontWeight: "600" },
 });
