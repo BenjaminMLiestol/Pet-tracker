@@ -10,6 +10,20 @@ export function registerUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
+// Credential endpoints return 401 for a wrong password; that is not an expired session.
+const PUBLIC_PATHS = ['/auth/login', '/auth/register'];
+
+async function readErrorMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '');
+  try {
+    const body = JSON.parse(text);
+    const firstValidationError = body?.errors && Object.values(body.errors).flat()[0];
+    return (firstValidationError as string) || body?.message || `HTTP ${res.status}`;
+  } catch {
+    return text || `HTTP ${res.status}`;
+  }
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: { method?: HttpMethod; headers?: Record<string, string>; body?: any } = {}
@@ -28,15 +42,14 @@ export async function apiFetch<T = unknown>(
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
-  if (res.status === 401) {
+  if (res.status === 401 && !PUBLIC_PATHS.includes(path)) {
     // Token invalid/expired — bounce to login
     if (onUnauthorized) onUnauthorized();
     throw new Error('Unauthorized');
   }
 
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(await readErrorMessage(res));
   }
 
   // Try to parse JSON, allow empty bodies
