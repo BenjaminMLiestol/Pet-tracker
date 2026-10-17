@@ -1,7 +1,10 @@
 import { getToken } from './tokenStorage';
 
 // Set EXPO_PUBLIC_API_URL in .env.local (see .env.example).
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/api';
+const API_ROOT = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/api').replace(/\/+$/, '');
+// The backend versions its routes; bump this when the app moves to a new API version.
+const API_VERSION = 'v1';
+const BASE_URL = `${API_ROOT}/${API_VERSION}`;
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
