@@ -11,8 +11,23 @@ type User = {
   first_name: string;
   last_name: string;
   date_of_birth: string | null;
-  // add more if your backend returns them
+  // When this person wants to be reminded, 24h "HH:MM". Missing on profiles saved
+  // before these settings existed; see reminderTimes().
+  feeding_reminder_time?: string;
+  walk_reminder_time?: string;
 };
+
+export const DEFAULT_FEEDING_REMINDER = '18:00';
+export const DEFAULT_WALK_REMINDER = '19:00';
+
+export function reminderTimes(user: User | null) {
+  return {
+    feeding: user?.feeding_reminder_time ?? DEFAULT_FEEDING_REMINDER,
+    walk: user?.walk_reminder_time ?? DEFAULT_WALK_REMINDER,
+  };
+}
+
+type ReminderTimePatch = Partial<Pick<User, 'feeding_reminder_time' | 'walk_reminder_time'>>;
 
 type AuthState = {
   user: User | null;
@@ -20,6 +35,8 @@ type AuthState = {
   isBootstrapping: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  // Saves personal settings. Optimistic; resolves true when the server accepted them.
+  updateReminderTimes: (patch: ReminderTimePatch) => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -71,9 +88,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         if (token && userStr) {
           setToken(token);
           setUser(JSON.parse(userStr) as User);
-          // Optionally refresh /auth/me here to verify token.
-          // const me = await apiFetch<User>('/auth/me');
-          // setUser(me);
+          // Quietly refresh the profile: picks up settings changed on another device (and
+          // fills in fields older saved profiles lack). A 401 here logs out an expired login.
+          apiFetch<User>('/auth/me')
+            .then((me) => {
+              setUser(me);
+              return AsyncStorage.setItem('authUser', JSON.stringify(me));
+            })
+            .catch(() => {});
         }
       } finally {
         setBootstrapping(false);
@@ -81,9 +103,26 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     })();
   }, []);
 
+  const updateReminderTimes = useCallback(
+    async (patch: ReminderTimePatch): Promise<boolean> => {
+      const before = user;
+      setUser((u) => (u ? { ...u, ...patch } : u));
+      try {
+        const saved = await apiFetch<User>('/auth/me', { method: 'PATCH', body: patch });
+        setUser(saved);
+        await AsyncStorage.setItem('authUser', JSON.stringify(saved)).catch(() => {});
+        return true;
+      } catch {
+        setUser(before);
+        return false;
+      }
+    },
+    [user]
+  );
+
   const value = useMemo(
-    () => ({ user, token, isBootstrapping, login, logout }),
-    [user, token, isBootstrapping, login, logout]
+    () => ({ user, token, isBootstrapping, login, logout, updateReminderTimes }),
+    [user, token, isBootstrapping, login, logout, updateReminderTimes]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

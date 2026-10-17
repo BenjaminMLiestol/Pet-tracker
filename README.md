@@ -50,4 +50,5 @@ Quiet and precise: surfaces separate by tone (never borders), primary actions ar
 - **Auth:** bearer token in SecureStore; any 401 (except on login/register) logs the user out. Signing out wipes the cached pet and care data.
 - **Offline:** pet data and care records are cached per pet and shown immediately while the network refreshes. Reads are retried once; writes never are, so a slow save can't create duplicates. Requests time out after 15 seconds.
 - **Long histories:** feedings and walks load 100 entries and fetch the next 100 as you scroll. Weights load up to 500 for the chart.
-- **Reminders:** local notifications only (feeding, walk, weekly weigh-in); no server push.
+- **Reminders:** local notifications only (feeding, walk, weekly weigh-in); no server push. The feeding and walk times are each person's own setting (Profile, saved on the server as `HH:MM`). A day's reminder is only scheduled if its time is still ahead and, for today, nothing has been logged yet. The schedule is rebuilt whenever data or settings change, and when the app returns to the foreground (after a quiet refresh, so a co-owner's entry cancels today's reminder). Two phones can't know about each other's entries until one of them opens the app.
+- **Bath interval:** days between baths is a setting on the dog (Profile), shared by everyone who owns it; the default is 30.

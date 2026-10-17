@@ -44,6 +44,9 @@ export type PetContextValue = {
 	addWalk: () => Promise<boolean>;
 	removeWalk: (id: number) => Promise<boolean>;
 	setBathedToday: () => Promise<boolean>;
+	// Days between baths (shared by everyone who owns the pet; default 30).
+	bathIntervalDays: number;
+	setBathInterval: (days: number) => Promise<boolean>;
 	nextBathDueAt: Date | null;
 	isBathDue: boolean;
 	bathOverdueDays: number;
@@ -55,6 +58,8 @@ export type PetContextValue = {
 	// ⬇️ New for pull-to-refresh
 	refresh: () => Promise<void>;
 	refreshing: boolean;
+	// Quietly pulls fresh data (no spinner); used when the app returns to the foreground.
+	sync: () => Promise<void>;
 
 	// Infinite scroll for the long logs (100 more entries per call)
 	loadMore: (kind: PagedKind) => Promise<void>;
@@ -66,6 +71,8 @@ export type PagedKind = "feedings" | "walks";
 
 const PetContext = createContext<PetContextValue | undefined>(undefined);
 
+export const DEFAULT_BATH_INTERVAL_DAYS = 30;
+
 // ===== Backend API shapes =====
 type ApiPet = {
 	id: number;
@@ -73,6 +80,7 @@ type ApiPet = {
 	age?: number | null;
 	breed?: string | null;
 	timezone?: string | null;
+	bath_interval_days?: number | null;
 };
 type ApiFeeding = {
 	id: number;
@@ -488,6 +496,38 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		[pet, runMutation],
 	);
 
+	// Saves the shared bath interval. Optimistic: the schedule updates at once and rolls
+	// back if the server refuses. Resolves true when saved.
+	const setBathInterval = useCallback(
+		async (days: number): Promise<boolean> => {
+			if (!pet) return false;
+			const previous = pet.bath_interval_days ?? DEFAULT_BATH_INTERVAL_DAYS;
+			setPet((p) => (p ? { ...p, bath_interval_days: days } : p));
+			try {
+				const saved = await apiFetch<ApiPet>(`/pets/${pet.id}`, {
+					method: "PATCH",
+					body: { bath_interval_days: days },
+				});
+				setPet((p) => (p && p.id === saved.id ? { ...p, ...saved } : p));
+				return true;
+			} catch {
+				setPet((p) => (p && p.id === pet.id ? { ...p, bath_interval_days: previous } : p));
+				return false;
+			}
+		},
+		[pet],
+	);
+
+	// ---- Quiet refresh (no spinner), e.g. when the app comes back to the foreground ----
+	const sync = useCallback(async () => {
+		if (!pet?.id) return;
+		try {
+			await fetchActivities(pet.id);
+		} catch (e) {
+			console.warn("Failed to sync pet data", e);
+		}
+	}, [pet?.id, fetchActivities]);
+
 	// ---- Derived values ----
 	const value = useMemo<PetContextValue>(() => {
 		const today = new Date();
@@ -505,9 +545,9 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		const lastBathTs = getLatestTimestamp(baths);
 		const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
 
-		const monthMs = 1000 * 60 * 60 * 24 * 30;
+		const bathIntervalDays = pet?.bath_interval_days ?? DEFAULT_BATH_INTERVAL_DAYS;
 		const nextBathDueAt = lastBathAt
-			? new Date(lastBathAt.getTime() + monthMs)
+			? new Date(lastBathAt.getTime() + bathIntervalDays * 24 * 60 * 60 * 1000)
 			: today;
 		// Due on the due date and every day after it until a bath is logged.
 		const bathOverdueDays = Math.max(
@@ -544,6 +584,8 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			addWalk,
 			removeWalk,
 			setBathedToday,
+			bathIntervalDays,
+			setBathInterval,
 			nextBathDueAt,
 			isBathDue,
 			bathOverdueDays,
@@ -553,6 +595,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			// pull-to-refresh
 			refresh,
 			refreshing,
+			sync,
 
 			// infinite scroll
 			loadMore,
@@ -570,10 +613,12 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		addWalk,
 		removeWalk,
 		setBathedToday,
+		setBathInterval,
 		setWeightToday,
 		busy,
 		refresh,
 		refreshing,
+		sync,
 		loadMore,
 		hasMore,
 		loadingMore,

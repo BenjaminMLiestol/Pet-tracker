@@ -12,14 +12,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { useTranslation } from "react-i18next";
 import { usePet } from "./PetContext";
-import { useAuth } from "./AuthContext";
+import { reminderTimes, useAuth } from "./AuthContext";
+import { parseTime, planDailyReminders } from "../utils/reminders";
 
 const STORAGE_KEY = "app/reminders-enabled";
 const CHANNEL_ID = "reminders";
 
-// Fixed schedule (local time).
-const FEEDING_HOUR = 18;
-const WALK_HOUR = 19;
+// Feeding and walk times are the user's own setting (Profile). The weigh-in is fixed.
 const WEIGH_IN_DAY = 0; // Sunday
 const WEIGH_IN_HOUR = 10;
 const DAYS_AHEAD = 7;
@@ -68,8 +67,9 @@ function at(base: Date, dayOffset: number, hour: number): Date {
 
 export function RemindersProvider({ children }: { children: ReactNode }) {
 	const { t, i18n } = useTranslation();
-	const { token } = useAuth();
-	const { name, hasFedToday, hasWalkedToday, weights } = usePet();
+	const { token, user } = useAuth();
+	const { name, hasFedToday, hasWalkedToday, weights, sync } = usePet();
+	const { feeding: feedingTime, walk: walkTime } = reminderTimes(user);
 	const [enabled, setEnabledState] = useState(false);
 	const [appActiveTick, setAppActiveTick] = useState(0);
 
@@ -83,13 +83,17 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 			.catch(() => {});
 	}, []);
 
-	// Rebuild the schedule when the day rolls over while the app was backgrounded.
+	// When the app returns to the foreground: pull fresh data first (a co-owner may have fed
+	// the dog, which should cancel today's reminder), and rebuild the schedule in case the
+	// day rolled over while the app was in the background.
 	useEffect(() => {
 		const sub = AppState.addEventListener("change", (s) => {
-			if (s === "active") setAppActiveTick((n) => n + 1);
+			if (s !== "active") return;
+			setAppActiveTick((n) => n + 1);
+			sync();
 		});
 		return () => sub.remove();
-	}, []);
+	}, [sync]);
 
 	const setEnabled = useCallback(async (next: boolean) => {
 		if (next && !(await ensurePermission())) return false;
@@ -125,19 +129,21 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 				});
 			};
 
-			for (let d = 0; d < DAYS_AHEAD; d += 1) {
-				if (!(d === 0 && hasFedToday))
-					await schedule(
-						at(now, d, FEEDING_HOUR),
-						t("reminder_feeding_title"),
-						t("reminder_feeding_body", { name }),
-					);
-				if (!(d === 0 && hasWalkedToday))
-					await schedule(
-						at(now, d, WALK_HOUR),
-						t("reminder_walk_title"),
-						t("reminder_walk_body", { name }),
-					);
+			// Reminders only exist for what still needs doing: today's is skipped once logged.
+			const planned = planDailyReminders({
+				now,
+				daysAhead: DAYS_AHEAD,
+				feeding: parseTime(feedingTime, { hour: 18, minute: 0 }),
+				walk: parseTime(walkTime, { hour: 19, minute: 0 }),
+				fedToday: hasFedToday,
+				walkedToday: hasWalkedToday,
+			});
+			for (const reminder of planned) {
+				await schedule(
+					reminder.at,
+					t(reminder.kind === "feeding" ? "reminder_feeding_title" : "reminder_walk_title"),
+					t(reminder.kind === "feeding" ? "reminder_feeding_body" : "reminder_walk_body", { name }),
+				);
 			}
 
 			// Next Sundays, skipping any within 6 days of the last logged weight.
@@ -162,6 +168,8 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		hasFedToday,
 		hasWalkedToday,
 		lastWeightAt,
+		feedingTime,
+		walkTime,
 		i18n.language,
 		t,
 		appActiveTick,

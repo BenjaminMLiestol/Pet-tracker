@@ -16,8 +16,17 @@ export default function BathsScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { baths, nextBathDueAt, isBathDue, bathOverdueDays, busy, setBathedToday, refresh, refreshing } =
-		usePet();
+	const {
+		baths,
+		nextBathDueAt,
+		isBathDue,
+		bathOverdueDays,
+		bathIntervalDays,
+		busy,
+		setBathedToday,
+		refresh,
+		refreshing,
+	} = usePet();
 	const isFocused = useIsFocused();
 	const m = useMotion();
 
@@ -90,7 +99,7 @@ export default function BathsScreen() {
 								entering={m.fadeIn}
 								exiting={m.exit}
 							>
-								{t("monthly_schedule_hint")}
+								{t("bath_schedule_hint", { count: bathIntervalDays })}
 							</Animated.Text>
 						)}
 					</LayoutAnimationConfig>

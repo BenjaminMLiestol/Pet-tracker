@@ -12,13 +12,19 @@ type Props = {
 	label: string;
 	value: Date;
 	onChange: (date: Date) => void;
+	// "time" shows a clock picker and a HH:MM value; default is a calendar date.
+	mode?: "date" | "time";
 };
 
-export default function DateField({ label, value, onChange }: Props) {
+export default function DateField({ label, value, onChange, mode = "date" }: Props) {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { i18n } = useTranslation();
 	const locale = i18n.language === "nb" ? "nb-NO" : "en-US";
+	const text =
+		mode === "time"
+			? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hour12: false }).format(value)
+			: new Intl.DateTimeFormat(locale).format(value);
 
 	const handle = (_: unknown, picked?: Date) => {
 		if (picked) onChange(picked);
@@ -31,24 +37,26 @@ export default function DateField({ label, value, onChange }: Props) {
 				<Pressable
 					style={styles.androidValue}
 					accessibilityRole="button"
-					accessibilityLabel={`${label}: ${new Intl.DateTimeFormat(locale).format(value)}`}
+					accessibilityLabel={`${label}: ${text}`}
 					onPress={() =>
 						DateTimePickerAndroid.open({
 							value,
-							mode: "date",
+							mode,
+							is24Hour: true,
 							onChange: handle,
 						})
 					}
 				>
-					<Text>{new Intl.DateTimeFormat(locale).format(value)}</Text>
+					<Text>{text}</Text>
 				</Pressable>
 			) : (
 				<DateTimePicker
 					value={value}
-					mode="date"
+					mode={mode}
 					display="compact"
 					accessibilityLabel={label}
-					locale={locale}
+					// iOS follows the locale for 12/24h; en-GB is the 24-hour English.
+					locale={mode === "time" && locale === "en-US" ? "en-GB" : locale}
 					themeVariant={c.isDark ? "dark" : "light"}
 					onChange={handle}
 				/>
