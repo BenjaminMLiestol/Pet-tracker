@@ -37,6 +37,12 @@ const FULL = {
 	fadeIn: fade(200),
 	exit: fadeOut(160),
 	exitShort: fadeOut(150),
+	// Toast: drops in from the top edge (250ms) and leaves the way it came (180ms).
+	toastEnter: enterFrom(-12, 250),
+	toastExit: new Keyframe({
+		0: { opacity: 1, transform: [{ translateY: 0 }] },
+		100: { opacity: 0, transform: [{ translateY: -8 }], easing: EASE_OUT },
+	}).duration(180),
 	// Neighbouring content glides into its new position.
 	layout: LinearTransition.duration(200).easing(EASE_OUT),
 };
@@ -50,6 +56,8 @@ const REDUCED: typeof FULL = {
 	fadeIn: fade(200),
 	exit: fadeOut(160),
 	exitShort: fadeOut(150),
+	toastEnter: fade(250) as never,
+	toastExit: fadeOut(180) as never,
 	layout: undefined as never,
 };
 

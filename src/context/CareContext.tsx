@@ -44,7 +44,8 @@ type CareContextValue = {
 	refreshing: boolean;
 	refresh: () => Promise<void>;
 	addRecord: (kind: CareKind, input: CareInput) => Promise<boolean>;
-	removeRecord: (kind: CareKind, id: number) => Promise<void>;
+	// Resolves true when the delete went through (errors are reported by the caller).
+	removeRecord: (kind: CareKind, id: number) => Promise<boolean>;
 };
 
 const CareContext = createContext<CareContextValue | undefined>(undefined);
@@ -212,7 +213,8 @@ export function CareProvider({ children }: { children: ReactNode }) {
 	}, [petId, load]);
 
 	// Same guard as PetContext: block double taps, alert on failure.
-	const run = useCallback(async (fn: () => Promise<void>): Promise<boolean> => {
+	const run = useCallback(
+		async (fn: () => Promise<void>, opts?: { silent?: boolean }): Promise<boolean> => {
 		if (inFlight.current) return false;
 		inFlight.current = true;
 		setBusy(true);
@@ -220,14 +222,16 @@ export function CareProvider({ children }: { children: ReactNode }) {
 			await fn();
 			return true;
 		} catch (e) {
-			if (!(e instanceof Error && e.message === "Unauthorized"))
+			if (!(e instanceof Error && e.message === "Unauthorized") && !opts?.silent)
 				Alert.alert(i18n.t("error_title"), describeError(e));
 			return false;
 		} finally {
 			inFlight.current = false;
 			setBusy(false);
 		}
-	}, []);
+		},
+		[],
+	);
 
 	const addRecord = useCallback(
 		(kind: CareKind, input: CareInput) =>
@@ -252,15 +256,17 @@ export function CareProvider({ children }: { children: ReactNode }) {
 	);
 
 	const removeRecord = useCallback(
-		async (kind: CareKind, id: number) => {
-			await run(async () => {
-				await apiFetch(`${ENDPOINT[kind]}/${id}`, { method: "DELETE" });
-				setRecords((prev) => ({
-					...prev,
-					[kind]: prev[kind].filter((r) => r.id !== id),
-				}));
-			});
-		},
+		(kind: CareKind, id: number) =>
+			run(
+				async () => {
+					await apiFetch(`${ENDPOINT[kind]}/${id}`, { method: "DELETE" });
+					setRecords((prev) => ({
+						...prev,
+						[kind]: prev[kind].filter((r) => r.id !== id),
+					}));
+				},
+				{ silent: true },
+			),
 		[run],
 	);
 

@@ -38,15 +38,16 @@ export type PetContextValue = {
 	currentWeightKg: number | null;
 	feedingsToday: number;
 	walksToday: number;
-	addFeeding: () => Promise<void>;
-	removeFeeding: (id: number) => Promise<void>;
-	addWalk: () => Promise<void>;
-	removeWalk: (id: number) => Promise<void>;
-	setBathedToday: () => Promise<void>;
+	// Mutations resolve true when the save succeeded.
+	addFeeding: () => Promise<boolean>;
+	removeFeeding: (id: number) => Promise<boolean>;
+	addWalk: () => Promise<boolean>;
+	removeWalk: (id: number) => Promise<boolean>;
+	setBathedToday: () => Promise<boolean>;
 	nextBathDueAt: Date | null;
 	isBathDue: boolean;
 	bathOverdueDays: number;
-	setWeightToday: (weightKg: number) => Promise<void>;
+	setWeightToday: (weightKg: number) => Promise<boolean>;
 
 	// True while a save request is in flight
 	busy: boolean;
@@ -199,20 +200,27 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	// Save-in-flight guard: blocks double taps and surfaces failures to the user
 	const [busy, setBusy] = useState(false);
 	const inFlight = useRef(false);
-	const runMutation = useCallback(async (fn: () => Promise<void>) => {
-		if (inFlight.current) return;
+	// Resolves true when the save went through. `silent` skips the error alert so the
+	// caller can report the outcome itself (deletes use a toast).
+	const runMutation = useCallback(
+		async (fn: () => Promise<void>, opts?: { silent?: boolean }): Promise<boolean> => {
+		if (inFlight.current) return false;
 		inFlight.current = true;
 		setBusy(true);
 		try {
 			await fn();
+			return true;
 		} catch (e) {
-			if (e instanceof Error && e.message === "Unauthorized") return; // handled by logout
-			Alert.alert(i18n.t("error_title"), describeError(e));
+			if (e instanceof Error && e.message === "Unauthorized") return false; // handled by logout
+			if (!opts?.silent) Alert.alert(i18n.t("error_title"), describeError(e));
+			return false;
 		} finally {
 			inFlight.current = false;
 			setBusy(false);
 		}
-	}, []);
+		},
+		[],
+	);
 
 	// ---- Persist state to cache whenever it changes ----
 	useEffect(() => {
@@ -411,7 +419,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			runMutation(async () => {
 				await apiFetch(`/feedings/${id}`, { method: "DELETE" });
 				setFeedings((prev) => prev.filter((f) => f.id !== id));
-			}),
+			}, { silent: true }),
 		[runMutation],
 	);
 
@@ -459,7 +467,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			runMutation(async () => {
 				await apiFetch(`/walks/${id}`, { method: "DELETE" });
 				setWalks((prev) => prev.filter((w) => w.id !== id));
-			}),
+			}, { silent: true }),
 		[runMutation],
 	);
 

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Button, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Button, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,7 @@ import { useMemo } from "react";
 import { useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
 import { useFreshIds, useMotion } from "../motion";
+import { useToast } from "../components/Toast";
 
 const KINDS: CareKind[] = ["vet", "vaccination", "parasite"];
 
@@ -22,6 +23,7 @@ export default function CareScreen() {
 	const { records, busy, refreshing, refresh, addRecord, removeRecord } =
 		useCare();
 	const { timezone } = usePet();
+	const toast = useToast();
 	const isFocused = useIsFocused();
 	const [formKind, setFormKind] = useState<CareKind | null>(null);
 
@@ -61,15 +63,11 @@ export default function CareScreen() {
 		};
 	};
 
-	const confirmRemove = (kind: CareKind, id: number) =>
-		Alert.alert(t("delete_entry_title"), t("delete_entry_message"), [
-			{ text: t("cancel"), style: "cancel" },
-			{
-				text: t("delete"),
-				style: "destructive",
-				onPress: () => removeRecord(kind, id),
-			},
-		]);
+	// Deletes happen straight away; the toast reports how it went.
+	const remove = async (kind: CareKind, id: number) => {
+		const ok = await removeRecord(kind, id);
+		toast.show(ok ? t("entry_deleted") : t("delete_failed"), ok ? "success" : "error");
+	};
 
 	return (
 		<>
@@ -118,7 +116,7 @@ export default function CareScreen() {
 											{r.notes ? <Text style={styles.recordNotes}>{r.notes}</Text> : null}
 										</View>
 										<Pressable
-											onPress={() => confirmRemove(kind, r.id)}
+											onPress={() => remove(kind, r.id)}
 											disabled={busy}
 											hitSlop={8}
 											accessibilityRole="button"

@@ -24,6 +24,8 @@ import { initI18n } from './src/i18n';
 import { useMemo } from "react";
 import { useTheme, type Colors } from "./src/theme";
 import { Text } from "./src/components/themed";
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ToastProvider } from './src/components/Toast';
 
 function useNavigationTheme(): Theme {
   const c = useTheme();
@@ -149,17 +151,21 @@ function RootNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <PetProvider>
-        <RemindersProvider>
-          <CareProvider>
-            <ThemedNavigation>
-              <RootNavigator />
-            </ThemedNavigation>
-          </CareProvider>
-        </RemindersProvider>
-      </PetProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <PetProvider>
+            <RemindersProvider>
+              <CareProvider>
+                <ThemedNavigation>
+                  <RootNavigator />
+                </ThemedNavigation>
+              </CareProvider>
+            </RemindersProvider>
+          </PetProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </SafeAreaProvider>
   );
 }
 

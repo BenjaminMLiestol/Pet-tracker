@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, StyleSheet, Pressable, Alert, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -9,6 +9,7 @@ import { useTheme, type Colors } from "../theme";
 import { Text } from "./themed";
 import AppButton from "./AppButton";
 import TickText from "./TickText";
+import { useToast } from "./Toast";
 import { useFreshIds, useMotion } from "../motion";
 
 type Entry = { id: number; timestamp: number };
@@ -20,7 +21,7 @@ type Props = {
 	entries: Entry[];
 	countToday: number;
 	onAdd: () => void;
-	onRemove: (id: number) => void;
+	onRemove: (id: number) => Promise<boolean>;
 	// Infinite scroll: called near the end of the list
 	onLoadMore: () => void;
 	loadingMore: boolean;
@@ -43,6 +44,7 @@ export default function ActivityLogScreen({
 	const { t, i18n } = useTranslation();
 	const { name, busy, refresh, refreshing } = usePet();
 	const isFocused = useIsFocused();
+	const toast = useToast();
 
 	const sorted = useMemo(
 		() => [...entries].sort((a, b) => b.timestamp - a.timestamp),
@@ -62,11 +64,11 @@ export default function ActivityLogScreen({
 		{ dateStyle: "short", timeStyle: "short" },
 	);
 
-	const confirmRemove = (id: number) =>
-		Alert.alert(t("delete_entry_title"), t("delete_entry_message"), [
-			{ text: t("cancel"), style: "cancel" },
-			{ text: t("delete"), style: "destructive", onPress: () => onRemove(id) },
-		]);
+	// Deletes happen straight away; the toast reports how it went.
+	const remove = async (id: number) => {
+		const ok = await onRemove(id);
+		toast.show(ok ? t("entry_deleted") : t("delete_failed"), ok ? "success" : "error");
+	};
 
 	return (
 		<Animated.FlatList
@@ -114,7 +116,7 @@ export default function ActivityLogScreen({
 						{dtf.format(new Date(item.timestamp))}
 					</Text>
 					<Pressable
-						onPress={() => confirmRemove(item.id)}
+						onPress={() => remove(item.id)}
 						disabled={busy}
 						hitSlop={8}
 						accessibilityRole="button"
