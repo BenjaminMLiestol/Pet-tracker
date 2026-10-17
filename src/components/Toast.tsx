@@ -17,17 +17,20 @@ import { useTheme } from "../theme";
 import { Text } from "./themed";
 
 type Kind = "success" | "error";
-type ToastApi = { show: (message: string, kind?: Kind) => void };
+// An optional button on the toast (e.g. Undo). Pressing it also dismisses the toast.
+type ToastAction = { label: string; onPress: () => void };
+type ToastData = { id: number; message: string; kind: Kind; action?: ToastAction };
+type ToastApi = { show: (message: string, kind?: Kind, action?: ToastAction) => void };
 
 const ToastContext = createContext<ToastApi | undefined>(undefined);
 
 const SHOW_MS = { success: 2200, error: 3500 };
+// Long enough to notice the button and reach for it.
+const ACTION_MS = 5000;
 
 // One toast at a time: a new one replaces the current one.
 export function ToastProvider({ children }: { children: ReactNode }) {
-	const [toast, setToast] = useState<{ id: number; message: string; kind: Kind } | null>(
-		null,
-	);
+	const [toast, setToast] = useState<ToastData | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const nextId = useRef(0);
 
@@ -36,12 +39,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 		setToast(null);
 	}, []);
 
-	const show = useCallback((message: string, kind: Kind = "success") => {
+	const show = useCallback((message: string, kind: Kind = "success", action?: ToastAction) => {
 		clearTimeout(timer.current);
 		nextId.current += 1;
-		setToast({ id: nextId.current, message, kind });
+		setToast({ id: nextId.current, message, kind, action });
 		AccessibilityInfo.announceForAccessibility(message);
-		timer.current = setTimeout(() => setToast(null), SHOW_MS[kind]);
+		timer.current = setTimeout(() => setToast(null), action ? ACTION_MS : SHOW_MS[kind]);
 	}, []);
 
 	useEffect(() => () => clearTimeout(timer.current), []);
@@ -56,13 +59,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 	);
 }
 
-function ToastHost({
-	toast,
-	onPress,
-}: {
-	toast: { id: number; message: string; kind: Kind } | null;
-	onPress: () => void;
-}) {
+function ToastHost({ toast, onPress }: { toast: ToastData | null; onPress: () => void }) {
 	const c = useTheme();
 	const m = useMotion();
 	const insets = useSafeAreaInsets();
@@ -96,6 +93,21 @@ function ToastHost({
 							{toast.message}
 						</Text>
 					</Pressable>
+					{toast.action && (
+						<Pressable
+							onPress={() => {
+								onPress();
+								toast.action?.onPress();
+							}}
+							hitSlop={8}
+							style={styles.action}
+							accessibilityRole="button"
+						>
+							<Text variant="sub" style={[styles.actionLabel, { color: c.bg }]}>
+								{toast.action.label}
+							</Text>
+						</Pressable>
+					)}
 				</Animated.View>
 			)}
 		</View>
@@ -111,6 +123,8 @@ export function useToast(): ToastApi {
 const styles = StyleSheet.create({
 	host: { position: "absolute", left: 16, right: 16, alignItems: "center" },
 	toast: {
+		flexDirection: "row",
+		alignItems: "center",
 		borderRadius: 999,
 		borderCurve: "continuous",
 		maxWidth: 480,
@@ -126,6 +140,9 @@ const styles = StyleSheet.create({
 		gap: 10,
 		paddingVertical: 12,
 		paddingHorizontal: 18,
+		flexShrink: 1,
 	},
+	action: { paddingVertical: 12, paddingRight: 18, paddingLeft: 4 },
+	actionLabel: { fontWeight: "700", textDecorationLine: "underline" },
 	message: { fontWeight: "500", flexShrink: 1 },
 });

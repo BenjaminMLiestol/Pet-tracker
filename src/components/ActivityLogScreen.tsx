@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import { formatWhen } from "../utils/dates";
 import { useFreshIds, useMotion } from "../motion";
 import { Text } from "./themed";
 import AppButton from "./AppButton";
+import EntryTimeModal from "./EntryTimeModal";
 import TickText from "./TickText";
 import { useToast } from "./Toast";
 import { Section, Surface } from "./ui";
@@ -23,7 +24,9 @@ type Props = {
 	logButtonLabel: string;
 	entries: Entry[];
 	countToday: number;
-	onAdd: () => void;
+	// `at` backdates a new entry; omitted means now.
+	onAdd: (at?: Date) => Promise<boolean>;
+	onUpdate: (id: number, at: Date) => Promise<boolean>;
 	onRemove: (id: number) => Promise<boolean>;
 	// Infinite scroll: called near the end of the list
 	onLoadMore: () => void;
@@ -38,6 +41,7 @@ export default function ActivityLogScreen({
 	entries,
 	countToday,
 	onAdd,
+	onUpdate,
 	onRemove,
 	onLoadMore,
 	loadingMore,
@@ -63,15 +67,28 @@ export default function ActivityLogScreen({
 	const locale = i18n.language === "nb" ? "nb-NO" : "en-GB";
 	const labels = { today: t("today"), yesterday: t("yesterday") };
 
-	// Deletes happen straight away; the toast reports how it went.
-	const remove = async (id: number) => {
-		const ok = await onRemove(id);
-		toast.show(ok ? t("entry_deleted") : t("delete_failed"), ok ? "success" : "error");
+	// The time sheet either logs a new entry after the fact (editing === null) or moves one.
+	const [sheet, setSheet] = useState<{ editing: Entry | null } | null>(null);
+
+	// Deletes happen straight away; the toast reports how it went and offers Undo, which
+	// logs the entry again at its original time.
+	const remove = async (entry: Entry) => {
+		const ok = await onRemove(entry.id);
+		if (!ok) return toast.show(t("delete_failed"), "error");
+		toast.show(t("entry_deleted"), "success", {
+			label: t("entry_undo"),
+			onPress: () => {
+				onAdd(new Date(entry.timestamp));
+			},
+		});
 	};
 
 	const last = sorted.length - 1;
 
+	const editing = sheet?.editing ?? null;
+
 	return (
+		<>
 		<Animated.FlatList
 			style={styles.screen}
 			contentContainerStyle={[styles.content, { paddingTop: insets.top + space[4] }]}
@@ -100,7 +117,13 @@ export default function ActivityLogScreen({
 						<Text variant="sub" tone="muted" style={styles.summaryLabel}>
 							{name ? `${name} · ${todayLabel}` : todayLabel}
 						</Text>
-						<AppButton title={logButtonLabel} onPress={onAdd} disabled={busy} icon="add" />
+						<AppButton title={logButtonLabel} onPress={() => onAdd()} disabled={busy} icon="add" />
+						<AppButton
+							title={t("log_earlier")}
+							onPress={() => setSheet({ editing: null })}
+							disabled={busy}
+							variant="ghost"
+						/>
 					</Surface>
 
 					<Section label={t("history")} style={styles.sectionLabel}>
@@ -118,11 +141,20 @@ export default function ActivityLogScreen({
 					entering={fresh.has(item.id) ? m.rowEnter : undefined}
 					exiting={m.exit}
 				>
-					<Text variant="body" style={type.numeric}>
-						{formatWhen(item.timestamp, timezone, locale, labels)}
-					</Text>
+					{/* Tap the time to change it. */}
 					<Pressable
-						onPress={() => remove(item.id)}
+						onPress={() => setSheet({ editing: item })}
+						disabled={busy}
+						style={styles.when}
+						accessibilityRole="button"
+						accessibilityLabel={t("entry_edit_title")}
+					>
+						<Text variant="body" style={type.numeric}>
+							{formatWhen(item.timestamp, timezone, locale, labels)}
+						</Text>
+					</Pressable>
+					<Pressable
+						onPress={() => remove(item)}
 						disabled={busy}
 						hitSlop={12}
 						style={styles.trash}
@@ -146,6 +178,14 @@ export default function ActivityLogScreen({
 				</Surface>
 			}
 		/>
+		<EntryTimeModal
+			visible={sheet !== null}
+			title={editing ? t("entry_edit_title") : t("entry_earlier_title")}
+			initial={editing ? new Date(editing.timestamp) : new Date()}
+			onClose={() => setSheet(null)}
+			onSave={(at) => (editing ? onUpdate(editing.id, at) : onAdd(at))}
+		/>
+		</>
 	);
 }
 
@@ -178,6 +218,7 @@ const makeStyles = (c: Colors) =>
 			borderBottomRightRadius: radius.lg,
 			...smooth,
 		},
+		when: { flex: 1, minHeight: 56, justifyContent: "center" },
 		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 		separatorWrap: { backgroundColor: c.surface },
 		separator: {

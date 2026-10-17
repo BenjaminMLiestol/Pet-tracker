@@ -51,9 +51,12 @@ export type PetContextValue = {
 	feedingsToday: number;
 	walksToday: number;
 	// Mutations resolve true when the save succeeded.
-	addFeeding: () => Promise<boolean>;
+	// `at` backdates the entry (defaults to now). Edits move an existing entry in time.
+	addFeeding: (at?: Date) => Promise<boolean>;
+	updateFeeding: (id: number, at: Date) => Promise<boolean>;
 	removeFeeding: (id: number) => Promise<boolean>;
-	addWalk: () => Promise<boolean>;
+	addWalk: (at?: Date) => Promise<boolean>;
+	updateWalk: (id: number, at: Date) => Promise<boolean>;
 	removeWalk: (id: number) => Promise<boolean>;
 	setBathedToday: () => Promise<boolean>;
 	// Days between baths (shared by everyone who owns the pet; default 30).
@@ -476,10 +479,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
 	// ---- Mutations: API-first (keeps server as source of truth), cache persists via effect ----
 	const addFeeding = useCallback(
-		() =>
+		(at?: Date) =>
 			runMutation(async () => {
 				if (!pet) return;
-				const nowIso = new Date().toISOString();
+				const nowIso = (at ?? new Date()).toISOString();
 				const created = await apiFetch<{
 					id: number;
 					fed_at: string;
@@ -498,6 +501,20 @@ export function PetProvider({ children }: { children: ReactNode }) {
 				]);
 			}),
 		[pet, runMutation],
+	);
+
+	const updateFeeding = useCallback(
+		(id: number, at: Date) =>
+			runMutation(async () => {
+				const saved = await apiFetch<ApiFeeding>(`/feedings/${id}`, {
+					method: "PATCH",
+					body: { fed_at: at.toISOString() },
+				});
+				setFeedings((prev) =>
+					prev.map((f) => (f.id === id ? { ...f, timestamp: Date.parse(saved.fed_at) } : f)),
+				);
+			}),
+		[runMutation],
 	);
 
 	const removeFeeding = useCallback(
@@ -524,10 +541,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	);
 
 	const addWalk = useCallback(
-		() =>
+		(at?: Date) =>
 			runMutation(async () => {
 				if (!pet) return;
-				const nowIso = new Date().toISOString();
+				const nowIso = (at ?? new Date()).toISOString();
 				const created = await apiFetch<{
 					id: number;
 					walked_at: string;
@@ -546,6 +563,20 @@ export function PetProvider({ children }: { children: ReactNode }) {
 				]);
 			}),
 		[pet, runMutation],
+	);
+
+	const updateWalk = useCallback(
+		(id: number, at: Date) =>
+			runMutation(async () => {
+				const saved = await apiFetch<ApiWalk>(`/walks/${id}`, {
+					method: "PATCH",
+					body: { walked_at: at.toISOString() },
+				});
+				setWalks((prev) =>
+					prev.map((w) => (w.id === id ? { ...w, timestamp: Date.parse(saved.walked_at) } : w)),
+				);
+			}),
+		[runMutation],
 	);
 
 	const removeWalk = useCallback(
@@ -726,8 +757,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			feedingsToday,
 			walksToday,
 			addFeeding,
+			updateFeeding,
 			removeFeeding,
 			addWalk,
+			updateWalk,
 			removeWalk,
 			setBathedToday,
 			bathIntervalDays,
@@ -762,8 +795,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		walks,
 		weights,
 		addFeeding,
+		updateFeeding,
 		removeFeeding,
 		addWalk,
+		updateWalk,
 		removeWalk,
 		setBathedToday,
 		setBathInterval,
