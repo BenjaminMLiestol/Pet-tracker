@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { radius, smooth, space, useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
 import DogManagerModal from "../components/DogManagerModal";
+import WeekInsights from "../components/WeekInsights";
 import { Group, PressScale, Row, Screen, Section, Surface } from "../components/ui";
 
 const DOG_IMG = require("../../assets/dog.png");
@@ -127,6 +128,10 @@ export default function HomeScreen() {
 						}
 					/>
 				</Group>
+			</Section>
+
+			<Section label={t("week_title")}>
+				<WeekInsights />
 			</Section>
 		</Screen>
 	);
