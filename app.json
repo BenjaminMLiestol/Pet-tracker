@@ -18,7 +18,8 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
-      }
+      },
+      "bundleIdentifier": "com.benjaminliestol.pettracker"
     },
     "android": {
       "adaptiveIcon": {
