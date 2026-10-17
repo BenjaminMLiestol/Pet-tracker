@@ -82,11 +82,13 @@ export function Row({
 	detail,
 	right,
 	style,
+	titleColor,
 }: {
 	title: string;
 	detail?: string;
 	right?: ReactNode;
 	style?: StyleProp<ViewStyle>;
+	titleColor?: string;
 }) {
 	return (
 		<View
@@ -104,7 +106,9 @@ export function Row({
 			]}
 		>
 			<View style={{ flexShrink: 1 }}>
-				<Text variant="body">{title}</Text>
+				<Text variant="body" style={titleColor ? { color: titleColor } : undefined}>
+					{title}
+				</Text>
 				{detail ? (
 					<Text variant="caption" tone="muted">
 						{detail}
@@ -318,6 +322,34 @@ export function Stepper({
 			</Text>
 			{button(1, value >= max)}
 		</View>
+	);
+}
+
+// A Row you can tap (opens a sheet, runs an action). It dims while pressed.
+export function PressRow({
+	title,
+	detail,
+	right,
+	onPress,
+	titleColor,
+	accessibilityLabel,
+}: {
+	title: string;
+	detail?: string;
+	right?: ReactNode;
+	onPress: () => void;
+	titleColor?: string;
+	accessibilityLabel?: string;
+}) {
+	return (
+		<Pressable
+			onPress={onPress}
+			accessibilityRole="button"
+			accessibilityLabel={accessibilityLabel ?? title}
+			style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
+		>
+			<Row title={title} detail={detail} right={right} titleColor={titleColor} />
+		</Pressable>
 	);
 }
 

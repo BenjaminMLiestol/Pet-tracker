@@ -23,6 +23,18 @@ export type WalkRecord = { id: number; timestamp: number; walked: boolean };
 export type WeightRecord = { timestamp: number; weightKg: number };
 
 export type PetContextValue = {
+	// All the dogs this person looks after, which one is active, and the loading state of that list.
+	pets: Dog[];
+	petsStatus: PetsStatus;
+	selectPet: (id: number) => Promise<void>;
+	// These throw an ApiError whose message is safe to show (for example a bad invitation code).
+	createPet: (input: NewDog) => Promise<Dog>;
+	joinWithCode: (code: string) => Promise<Dog>;
+	leavePet: (id: number) => Promise<void>;
+	// Re-reads the dog list (co-owners, shared settings). Called after sharing changes.
+	reloadPets: () => Promise<void>;
+	// The active dog's owners, by name.
+	owners: DogOwner[];
 	petId: number | null;
 	// IANA timezone that defines where a day starts for this pet
 	timezone: string;
@@ -81,7 +93,19 @@ type ApiPet = {
 	breed?: string | null;
 	timezone?: string | null;
 	bath_interval_days?: number | null;
+	date_of_birth?: string | null;
+	// Everyone who looks after the dog (names only; emails stay private).
+	users?: DogOwner[];
 };
+export type DogOwner = { id: number; first_name: string; last_name: string };
+export type Dog = ApiPet;
+export type NewDog = {
+	name: string;
+	breed?: string;
+	date_of_birth?: string;
+	timezone?: string;
+};
+export type PetsStatus = "loading" | "ready" | "error";
 type ApiFeeding = {
 	id: number;
 	feed_check: boolean;
@@ -176,10 +200,14 @@ type CachedBundle = {
 };
 
 export function PetProvider({ children }: { children: ReactNode }) {
-	const { token } = useAuth();
+	const { token, user } = useAuth();
 
-	// Active pet metadata
+	// Active pet metadata, and every dog this person looks after
 	const [pet, setPet] = useState<ApiPet | null>(null);
+	const [pets, setPets] = useState<ApiPet[]>([]);
+	const [petsStatus, setPetsStatus] = useState<PetsStatus>("loading");
+	// The dog whose data is on screen. Late responses for another dog are dropped.
+	const activePetId = useRef<number | null>(null);
 
 	// Activity state from backend (and cache)
 	const [feedings, setFeedings] = useState<FeedingRecord[]>([]);
@@ -250,6 +278,9 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			apiFetch<Paged<ApiWeight>>(list("/weights", WEIGHT_PAGE_SIZE)),
 		]);
 
+		// The user may have switched dogs while this was loading: drop the stale answer.
+		if (activePetId.current !== petId) return;
+
 		const feedingsPage = unwrapPage(feedingsRaw);
 		const walksPage = unwrapPage(walksRaw);
 		nextPage.current = { feedings: 2, walks: 2 };
@@ -311,90 +342,137 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		[pet, hasMore],
 	);
 
-	// ---- Public: refresh for pull-to-refresh ----
-	const refresh = useCallback(async () => {
-		if (!pet?.id) return;
-		setRefreshing(true);
-		try {
-			await fetchActivities(pet.id);
-		} finally {
-			setRefreshing(false);
-		}
-	}, [pet?.id, fetchActivities]);
+	// ---- Showing a dog: reset, then cache, then network ----
+	const clearActivities = useCallback(() => {
+		setFeedings([]);
+		setWalks([]);
+		setBaths([]);
+		setWeights([]);
+		setHasMore({ feedings: false, walks: false });
+	}, []);
 
-	// ---- Bootstrap: load from cache immediately, then refresh from API ----
+	const loadCached = useCallback(async (id: number) => {
+		try {
+			const raw = await AsyncStorage.getItem(cacheKey(id));
+			if (!raw || activePetId.current !== id) return;
+			const cached = JSON.parse(raw) as CachedBundle;
+			setFeedings(Array.isArray(cached.feedings) ? cached.feedings : []);
+			setWalks(Array.isArray(cached.walks) ? cached.walks : []);
+			setBaths(Array.isArray(cached.baths) ? cached.baths : []);
+			setWeights(Array.isArray(cached.weights) ? cached.weights : []);
+		} catch {
+			// ignore a malformed cache
+		}
+	}, []);
+
+	// Makes `selected` the active dog. The previous dog's lists are cleared in the same state
+	// update as the pet change, so the cache effect can never save them under the new dog's key.
+	const activate = useCallback(
+		async (selected: ApiPet) => {
+			activePetId.current = selected.id;
+			setPet(selected);
+			clearActivities();
+			AsyncStorage.setItem(STORAGE_ACTIVE_PET_ID, String(selected.id)).catch(() => {});
+			await loadCached(selected.id);
+			try {
+				await fetchActivities(selected.id);
+			} catch (e) {
+				// The cache may already be showing; a network failure must not break the screen.
+				console.warn("Failed to refresh pet data from API", e);
+			}
+		},
+		[clearActivities, loadCached, fetchActivities],
+	);
+
+	// Reads the dog list and keeps the active dog's details (owners, shared settings) fresh.
+	// If the active dog is gone (we left it), falls back to the first remaining one.
+	const loadPets = useCallback(async (): Promise<ApiPet[]> => {
+		const list = unwrapList<ApiPet>(await apiFetch<ApiPet[] | { data: ApiPet[] }>("/pets"));
+		setPets(list);
+		setPetsStatus("ready");
+		const current = list.find((p) => p.id === activePetId.current);
+		if (current) {
+			setPet((p) => (p && p.id === current.id ? { ...p, ...current } : p));
+		} else if (list.length > 0) {
+			await activate(list[0]);
+		} else {
+			activePetId.current = null;
+			setPet(null);
+			clearActivities();
+		}
+		return list;
+	}, [activate, clearActivities]);
+
+	// ---- Bootstrap: show the cached dog at once, then refresh from the API ----
 	useEffect(() => {
 		if (!token) {
-			setHasMore({ feedings: false, walks: false });
+			activePetId.current = null;
+			setPets([]);
+			setPetsStatus("loading");
 			setPet(null);
-			setFeedings([]);
-			setBaths([]);
-			setWalks([]);
-			setWeights([]);
+			clearActivities();
 			return;
 		}
 
 		let cancelled = false;
 
 		(async () => {
-			// 0) Try load cached bundle for stored active pet (instant UI)
+			setPetsStatus("loading");
 			const storedId = await AsyncStorage.getItem(STORAGE_ACTIVE_PET_ID);
-			const activeId = storedId ? Number(storedId) : undefined;
-			if (activeId && Number.isFinite(activeId)) {
-				const raw = await AsyncStorage.getItem(cacheKey(activeId));
-				if (raw && !cancelled) {
-					try {
-						const cached = JSON.parse(raw) as CachedBundle;
-						if (cached.pet) setPet(cached.pet);
-						setFeedings(Array.isArray(cached.feedings) ? cached.feedings : []);
-						setWalks(Array.isArray(cached.walks) ? cached.walks : []);
-						setBaths(Array.isArray(cached.baths) ? cached.baths : []);
-						setWeights(Array.isArray(cached.weights) ? cached.weights : []);
-					} catch {
-						// ignore malformed cache
+			const cachedId = storedId ? Number(storedId) : NaN;
+
+			// 0) The cached dog (instant, and works offline).
+			let showingCached = false;
+			if (Number.isFinite(cachedId)) {
+				try {
+					const raw = await AsyncStorage.getItem(cacheKey(cachedId));
+					const cached = raw ? (JSON.parse(raw) as CachedBundle) : null;
+					if (cached?.pet && !cancelled) {
+						activePetId.current = cachedId;
+						setPet(cached.pet);
+						setPets([cached.pet]);
+						await loadCached(cachedId);
+						showingCached = true;
 					}
+				} catch {
+					// ignore a malformed cache
 				}
 			}
 
-			// 1) Load pets from API
-			let selected: ApiPet | undefined;
+			// 1) The real list of dogs.
 			try {
-				const petsRes = await apiFetch<ApiPet[] | { data: ApiPet[] }>("/pets");
-				const pets = unwrapList<ApiPet>(petsRes);
-				if (pets.length === 0) {
-					if (!cancelled) setPet(null);
+				const list = unwrapList<ApiPet>(await apiFetch<ApiPet[] | { data: ApiPet[] }>("/pets"));
+				if (cancelled) return;
+				setPets(list);
+				setPetsStatus("ready");
+				if (list.length === 0) {
+					activePetId.current = null;
+					setPet(null);
+					clearActivities();
 					return;
 				}
-				const storedActiveId =
-					storedId ?? (await AsyncStorage.getItem(STORAGE_ACTIVE_PET_ID));
-				selected = pets.find((p) => String(p.id) === storedActiveId) ?? pets[0];
-				if (!cancelled) {
+				const selected = list.find((p) => p.id === cachedId) ?? list[0];
+				if (showingCached && selected.id === cachedId) {
+					// Same dog as the cache: keep what's on screen, refresh details and data.
 					setPet(selected);
-					await AsyncStorage.setItem(
-						STORAGE_ACTIVE_PET_ID,
-						String(selected.id),
+					await fetchActivities(selected.id).catch((e) =>
+						console.warn("Failed to refresh pet data from API", e),
 					);
+				} else {
+					await activate(selected);
 				}
-			} catch {
-				// If API for pets fails, keep showing whatever we had from cache.
-				return;
-			}
-
-			if (!selected || cancelled) return;
-
-			// 2) Load activities for active pet (prefer network; cache already shown)
-			try {
-				await fetchActivities(selected.id);
 			} catch (e) {
-				// Ignore; we already showed cache. Network can fail without breaking UI.
-				console.warn("Failed to refresh pet data from API", e);
+				if (cancelled) return;
+				// Offline with a cached dog is fine; with nothing to show it is an error.
+				setPetsStatus(showingCached ? "ready" : "error");
+				console.warn("Failed to load dogs", e);
 			}
 		})();
 
 		return () => {
 			cancelled = true;
 		};
-	}, [token, fetchActivities]);
+	}, [token, fetchActivities, activate, loadCached, clearActivities]);
 
 	// ---- Mutations: API-first (keeps server as source of truth), cache persists via effect ----
 	const addFeeding = useCallback(
@@ -518,15 +596,75 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		[pet],
 	);
 
-	// ---- Quiet refresh (no spinner), e.g. when the app comes back to the foreground ----
+	// ---- Refresh: this dog's data and the dog list (co-owners, shared settings) ----
+	const refresh = useCallback(async () => {
+		if (!pet?.id) return;
+		setRefreshing(true);
+		try {
+			await Promise.all([fetchActivities(pet.id), loadPets().catch(() => [])]);
+		} finally {
+			setRefreshing(false);
+		}
+	}, [pet?.id, fetchActivities, loadPets]);
+
+	// Same, without the pull-to-refresh spinner: used when the app returns to the foreground.
 	const sync = useCallback(async () => {
 		if (!pet?.id) return;
 		try {
-			await fetchActivities(pet.id);
+			await Promise.all([fetchActivities(pet.id), loadPets().catch(() => [])]);
 		} catch (e) {
 			console.warn("Failed to sync pet data", e);
 		}
-	}, [pet?.id, fetchActivities]);
+	}, [pet?.id, fetchActivities, loadPets]);
+
+	// ---- Dogs: switch, create, join with a code, leave ----
+	const selectPet = useCallback(
+		async (id: number) => {
+			if (id === activePetId.current) return;
+			const next = pets.find((p) => p.id === id);
+			if (next) await activate(next);
+		},
+		[pets, activate],
+	);
+
+	const createPet = useCallback(
+		async (input: NewDog): Promise<Dog> => {
+			const created = await apiFetch<ApiPet>("/pets", { method: "POST", body: input });
+			setPets((prev) => [...prev.filter((p) => p.id !== created.id), created]);
+			setPetsStatus("ready");
+			await activate(created);
+			return created;
+		},
+		[activate],
+	);
+
+	const joinWithCode = useCallback(
+		async (code: string): Promise<Dog> => {
+			const joined = await apiFetch<ApiPet>("/invitations/accept", {
+				method: "POST",
+				body: { code },
+			});
+			setPets((prev) => [...prev.filter((p) => p.id !== joined.id), joined]);
+			setPetsStatus("ready");
+			await activate(joined);
+			return joined;
+		},
+		[activate],
+	);
+
+	// Stops looking after a dog (the server keeps at least one owner on every dog).
+	const leavePet = useCallback(
+		async (id: number) => {
+			if (!user) return;
+			await apiFetch(`/pets/${id}/users/${user.id}`, { method: "DELETE" });
+			await loadPets();
+		},
+		[user, loadPets],
+	);
+
+	const reloadPets = useCallback(async () => {
+		await loadPets();
+	}, [loadPets]);
 
 	// ---- Derived values ----
 	const value = useMemo<PetContextValue>(() => {
@@ -565,6 +703,14 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			: null;
 
 		return {
+			pets,
+			petsStatus,
+			selectPet,
+			createPet,
+			joinWithCode,
+			leavePet,
+			reloadPets,
+			owners: pet?.users ?? [],
 			petId: pet?.id ?? null,
 			timezone,
 			name: pet?.name ?? "",
@@ -604,6 +750,13 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		};
 	}, [
 		pet,
+		pets,
+		petsStatus,
+		selectPet,
+		createPet,
+		joinWithCode,
+		leavePet,
+		reloadPets,
 		baths,
 		feedings,
 		walks,

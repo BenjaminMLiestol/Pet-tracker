@@ -14,9 +14,11 @@ type Props = {
 	onChange: (date: Date) => void;
 	// "time" shows a clock picker and a HH:MM value; default is a calendar date.
 	mode?: "date" | "time";
+	// The latest date that can be picked (e.g. a birthday can't be in the future).
+	maximumDate?: Date;
 };
 
-export default function DateField({ label, value, onChange, mode = "date" }: Props) {
+export default function DateField({ label, value, onChange, mode = "date", maximumDate }: Props) {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { i18n } = useTranslation();
@@ -43,6 +45,7 @@ export default function DateField({ label, value, onChange, mode = "date" }: Pro
 							value,
 							mode,
 							is24Hour: true,
+							maximumDate,
 							onChange: handle,
 						})
 					}
@@ -53,6 +56,7 @@ export default function DateField({ label, value, onChange, mode = "date" }: Pro
 				<DateTimePicker
 					value={value}
 					mode={mode}
+					maximumDate={maximumDate}
 					display="compact"
 					accessibilityLabel={label}
 					// iOS follows the locale for 12/24h; en-GB is the 24-hour English.

@@ -27,6 +27,13 @@ export function reminderTimes(user: User | null) {
   };
 }
 
+export type RegisterInput = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+};
+
 type ReminderTimePatch = Partial<Pick<User, 'feeding_reminder_time' | 'walk_reminder_time'>>;
 
 type AuthState = {
@@ -34,6 +41,8 @@ type AuthState = {
   token: string | null;
   isBootstrapping: boolean;
   login: (email: string, password: string) => Promise<void>;
+  // Creates an account and signs in. Throws an error whose message is safe to show.
+  register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   // Saves personal settings. Optimistic; resolves true when the server accepted them.
   updateReminderTimes: (patch: ReminderTimePatch) => Promise<boolean>;
@@ -68,17 +77,35 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     });
   }, [logout]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await apiFetch<{ user: User; token: string }>('/auth/login', {
-      method: 'POST',
-      body: { email, password },
-    });
-    // Persist before updating state: setting the token triggers data fetches that read it from storage.
+  // Persist before updating state: setting the token triggers data fetches that read it from storage.
+  const signIn = useCallback(async (res: { user: User; token: string }) => {
     await saveToken(res.token);
     await AsyncStorage.setItem('authUser', JSON.stringify(res.user));
     setUser(res.user);
     setToken(res.token);
   }, []);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const res = await apiFetch<{ user: User; token: string }>('/auth/login', {
+        method: 'POST',
+        body: { email, password },
+      });
+      await signIn(res);
+    },
+    [signIn]
+  );
+
+  const register = useCallback(
+    async (input: RegisterInput) => {
+      const res = await apiFetch<{ user: User; token: string }>('/auth/register', {
+        method: 'POST',
+        body: input,
+      });
+      await signIn(res);
+    },
+    [signIn]
+  );
 
   // Bootstrap from storage
   useEffect(() => {
@@ -121,8 +148,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   );
 
   const value = useMemo(
-    () => ({ user, token, isBootstrapping, login, logout, updateReminderTimes }),
-    [user, token, isBootstrapping, login, logout, updateReminderTimes]
+    () => ({ user, token, isBootstrapping, login, register, logout, updateReminderTimes }),
+    [user, token, isBootstrapping, login, register, logout, updateReminderTimes]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

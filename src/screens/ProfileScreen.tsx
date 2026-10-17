@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, StyleSheet, Switch, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Switch, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
@@ -10,8 +11,11 @@ import LanguageSwitcher from "../components/LanguageSwitcher";
 import AppButton from "../components/AppButton";
 import { Text } from "../components/themed";
 import DateField from "../components/DateField";
+import DogManagerModal from "../components/DogManagerModal";
+import InviteModal from "../components/InviteModal";
+import { removeOwner } from "../api/sharing";
 import { useToast } from "../components/Toast";
-import { Group, Row, Screen, Section, Stepper, Surface } from "../components/ui";
+import { Group, PressRow, Row, Screen, Section, Stepper, Surface } from "../components/ui";
 import { useMotion } from "../motion";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit";
 import { formatTime, parseTime, timeToDate } from "../utils/reminders";
@@ -29,9 +33,16 @@ export default function ProfileScreen() {
 		lastBathAt,
 		bathIntervalDays,
 		setBathInterval,
+		petId,
+		pets,
+		owners,
+		leavePet,
+		reloadPets,
 		refresh,
 		refreshing,
 	} = usePet();
+	const [dogsOpen, setDogsOpen] = useState(false);
+	const [inviteOpen, setInviteOpen] = useState(false);
 	const toast = useToast();
 	const m = useMotion();
 	const isFocused = useIsFocused();
@@ -82,6 +93,46 @@ export default function ProfileScreen() {
 	const asDate = (value: string, fallback: string) =>
 		timeToDate(parseTime(value, parseTime(fallback, { hour: 18, minute: 0 })));
 
+	// Removing a co-owner or leaving is a big step: ask first (unlike deleting a log entry).
+	const ownerName = (o: { first_name: string; last_name: string }) =>
+		`${o.first_name} ${o.last_name}`.trim();
+	const confirmRemove = (o: { id: number; first_name: string; last_name: string }) =>
+		Alert.alert(
+			t("owner_remove_title", { name: ownerName(o) }),
+			t("owner_remove_message", { name: ownerName(o), dog: petName }),
+			[
+				{ text: t("cancel"), style: "cancel" },
+				{
+					text: t("owner_remove"),
+					style: "destructive",
+					onPress: async () => {
+						try {
+							if (petId != null) await removeOwner(petId, o.id);
+							await reloadPets();
+							toast.show(t("saved"));
+						} catch {
+							toast.show(t("owner_action_failed"), "error");
+						}
+					},
+				},
+			],
+		);
+	const confirmLeave = () =>
+		Alert.alert(t("owner_leave_title", { dog: petName }), t("owner_leave_message"), [
+			{ text: t("cancel"), style: "cancel" },
+			{
+				text: t("owner_leave"),
+				style: "destructive",
+				onPress: async () => {
+					try {
+						if (petId != null) await leavePet(petId);
+					} catch {
+						toast.show(t("owner_action_failed"), "error");
+					}
+				},
+			},
+		]);
+
 	const fullName = user ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() : "";
 	const weightText = currentWeightKg != null ? `${currentWeightKg.toFixed(1)} kg` : "—";
 	const lastBathText = lastBathAt
@@ -113,6 +164,57 @@ export default function ProfileScreen() {
 					<Row title={t("breed")} right={value(breed || "—")} />
 					<Row title={t("current_weight_short")} right={value(weightText)} />
 					<Row title={t("last_bath_short")} right={value(lastBathText)} />
+				</Group>
+			</Section>
+
+			<Section label={t("dogs_title")}>
+				<Group>
+					<PressRow
+						title={t("dogs_switch")}
+						right={
+							<View style={styles.dogsRight}>
+								<Text variant="body" tone="muted" numberOfLines={1} style={styles.dogsCurrent}>
+									{pets.length > 1 ? `${petName} · ${pets.length}` : petName}
+								</Text>
+								<Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+							</View>
+						}
+						onPress={() => setDogsOpen(true)}
+					/>
+				</Group>
+			</Section>
+
+			<Section label={t("owners_title")}>
+				<Group>
+					{owners.map((o) => (
+						<Row
+							key={o.id}
+							title={ownerName(o)}
+							detail={o.id === user?.id ? t("owner_you") : undefined}
+							right={
+								o.id !== user?.id ? (
+									<Pressable
+										onPress={() => confirmRemove(o)}
+										hitSlop={10}
+										accessibilityRole="button"
+										accessibilityLabel={`${t("owner_remove")} ${ownerName(o)}`}
+									>
+										<Text variant="sub" tone="muted">
+											{t("owner_remove")}
+										</Text>
+									</Pressable>
+								) : undefined
+							}
+						/>
+					))}
+					<PressRow
+						title={t("invite_title")}
+						right={<Ionicons name="person-add-outline" size={20} color={c.text} />}
+						onPress={() => setInviteOpen(true)}
+					/>
+					{owners.length > 1 && (
+						<PressRow title={t("owner_leave")} titleColor={c.danger} onPress={confirmLeave} />
+					)}
 				</Group>
 			</Section>
 
@@ -191,6 +293,8 @@ export default function ProfileScreen() {
 					onPress={logout}
 				/>
 			</View>
+			<DogManagerModal visible={dogsOpen} onClose={() => setDogsOpen(false)} />
+			<InviteModal visible={inviteOpen} onClose={() => setInviteOpen(false)} />
 		</Screen>
 	);
 }
@@ -198,6 +302,8 @@ export default function ProfileScreen() {
 const makeStyles = (c: Colors) =>
 	StyleSheet.create({
 		value: { textAlign: "right", flexShrink: 1, ...type.numeric },
+		dogsRight: { flexDirection: "row", alignItems: "center", gap: space[2], flexShrink: 1 },
+		dogsCurrent: { flexShrink: 1 },
 		hint: { marginTop: space[2], paddingHorizontal: space[1] },
 		language: { padding: space[2] },
 		logout: { marginTop: space[2] },

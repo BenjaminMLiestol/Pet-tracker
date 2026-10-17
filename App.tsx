@@ -18,6 +18,7 @@ import { CareProvider } from './src/context/CareContext';
 import CareScreen from './src/screens/CareScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import PetGate from './src/screens/PetGate';
 import { useTranslation } from 'react-i18next';
 import './src/i18n';           // ensure module is loaded
 import { initI18n } from './src/i18n';
@@ -125,6 +126,15 @@ function AppTabs() {
   );
 }
 
+// Signed in, but a dog is needed first: PetGate shows loading, an error, or onboarding.
+function GatedTabs() {
+  return (
+    <PetGate>
+      <AppTabs />
+    </PetGate>
+  );
+}
+
 function RootNavigator() {
   const { token, isBootstrapping } = useAuth();
   const { t } = useTranslation();
@@ -142,7 +152,7 @@ function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {token ? (
-        <Stack.Screen name="AppTabs" component={AppTabs} />
+        <Stack.Screen name="AppTabs" component={GatedTabs} />
       ) : (
         <Stack.Screen name="Login" component={LoginScreen} />
       )}

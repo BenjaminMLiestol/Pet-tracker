@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
@@ -8,6 +9,7 @@ import { usePet } from "../context/PetContext";
 import { useAuth } from "../context/AuthContext";
 import { radius, smooth, space, useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
+import DogManagerModal from "../components/DogManagerModal";
 import { Group, PressScale, Row, Screen, Section, Surface } from "../components/ui";
 
 const DOG_IMG = require("../../assets/dog.png");
@@ -19,6 +21,7 @@ export default function HomeScreen() {
 	const isFocused = useIsFocused();
 	const navigation = useNavigation<any>();
 	const { user } = useAuth();
+	const [dogsOpen, setDogsOpen] = useState(false);
 	const {
 		name,
 		breed,
@@ -50,25 +53,40 @@ export default function HomeScreen() {
 			onRefresh={refresh}
 		>
 			{/* Toya gets the one warm moment on the page. */}
-			<View style={styles.hero}>
-				<View style={styles.heroText}>
-					<Text variant="title" style={styles.heroName} numberOfLines={1}>
-						{name}
-					</Text>
-					{breed ? (
-						<Text variant="sub" style={styles.heroBreed} numberOfLines={1}>
-							{breed}
-						</Text>
-					) : null}
+			{/* Tapping the dog's card switches dogs, or adds one. */}
+			<PressScale
+				onPress={() => setDogsOpen(true)}
+				accessibilityLabel={`${t("dogs_switch")}: ${name}`}
+				style={styles.heroWrap}
+			>
+				<View style={styles.hero}>
+					<View style={styles.heroText}>
+						<View style={styles.heroNameRow}>
+							<Text variant="title" style={styles.heroName} numberOfLines={1}>
+								{name}
+							</Text>
+							<Ionicons
+								name="chevron-down"
+								size={18}
+								color={c.isDark ? c.textSecondary : c.accentText}
+							/>
+						</View>
+						{breed ? (
+							<Text variant="sub" style={styles.heroBreed} numberOfLines={1}>
+								{breed}
+							</Text>
+						) : null}
+					</View>
+					<Image
+						source={DOG_IMG}
+						style={styles.heroImage}
+						resizeMode="contain"
+						accessible
+						accessibilityLabel={t("dog_image_alt", { defaultValue: "Dog" })}
+					/>
 				</View>
-				<Image
-					source={DOG_IMG}
-					style={styles.heroImage}
-					resizeMode="contain"
-					accessible
-					accessibilityLabel={t("dog_image_alt", { defaultValue: "Dog" })}
-				/>
-			</View>
+			</PressScale>
+			<DogManagerModal visible={dogsOpen} onClose={() => setDogsOpen(false)} />
 
 			<Section label={t("today")}>
 				<View style={styles.tiles}>
@@ -138,6 +156,8 @@ function StatTile({ value, label, onPress }: { value: number; label: string; onP
 
 const makeStyles = (c: Colors & { isDark: boolean }) =>
 	StyleSheet.create({
+		heroWrap: { marginBottom: space[6] },
+		heroNameRow: { flexDirection: "row", alignItems: "center", gap: space[1] },
 		hero: {
 			flexDirection: "row",
 			alignItems: "flex-end",
@@ -147,12 +167,11 @@ const makeStyles = (c: Colors & { isDark: boolean }) =>
 			...smooth,
 			paddingLeft: space[5],
 			paddingTop: space[5],
-			marginBottom: space[6],
 			overflow: "hidden",
 			minHeight: 168,
 		},
 		heroText: { flexShrink: 1, paddingBottom: space[5], alignSelf: "flex-start" },
-		heroName: { color: c.isDark ? c.text : c.accentText },
+		heroName: { color: c.isDark ? c.text : c.accentText, flexShrink: 1 },
 		heroBreed: { color: c.textSecondary, marginTop: 2 },
 		heroImage: { width: 176, height: 176 },
 		tiles: { flexDirection: "row", gap: space[3] },
