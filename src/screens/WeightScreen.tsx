@@ -13,6 +13,7 @@ import {
 import { usePet } from "../context/PetContext";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
+import WeightChart from "../components/WeightChart";
 
 export default function WeightScreen() {
 	const { t, i18n } = useTranslation();
@@ -71,6 +72,11 @@ export default function WeightScreen() {
 							? `${currentWeightKg.toFixed(1)} kg`
 							: t("not_recorded")}
 					</Text>
+				</View>
+
+				<View style={styles.card}>
+					<Text style={styles.cardTitle}>{t("weight_trend")}</Text>
+					<WeightChart weights={weights} />
 				</View>
 
 				<View style={styles.card}>
