@@ -1,10 +1,12 @@
 import React, { useMemo } from "react";
 import { View, StyleSheet, Button, ScrollView, RefreshControl } from "react-native";
+import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { usePet } from "../context/PetContext";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
+import { useMotion } from "../motion";
 
 export default function BathsScreen() {
 	const c = useTheme();
@@ -21,6 +23,7 @@ export default function BathsScreen() {
 		refreshing,
 	} = usePet();
 	const isFocused = useIsFocused();
+	const m = useMotion();
 
 	const sorted = useMemo(
 		() => [...baths].sort((a, b) => b.timestamp - a.timestamp),
@@ -60,27 +63,44 @@ export default function BathsScreen() {
 		>
 			<Text style={styles.title}>{t("baths_title")}</Text>
 
-			<View style={styles.card}>
-				<Text style={styles.cardTitle}>{t("next_schedule")}</Text>
-				<Text style={styles.row}>
-					<Text style={styles.label}>{t("due")}: </Text>
-					{nextBathText}
-				</Text>
-				{bathOverdueDays > 0 && (
-					<Text style={styles.overdueText}>
-						{t("bath_overdue", { count: bathOverdueDays })}
+			{/* Marking a bath done swaps the button for a hint: cross-fade it instead of
+			    snapping, and let the card settle. skipEntering keeps the first open still. */}
+			<Animated.View style={styles.card} layout={m.layout}>
+				<LayoutAnimationConfig skipEntering>
+					<Text style={styles.cardTitle}>{t("next_schedule")}</Text>
+					<Text style={styles.row}>
+						<Text style={styles.label}>{t("due")}: </Text>
+						{nextBathText}
 					</Text>
-				)}
-				{isBathDue ? (
-					<Button
-						title={t("mark_bathed_today")}
-						onPress={setBathedToday}
-						disabled={busy}
-					/>
-				) : (
-					<Text style={styles.helperText}>{t("monthly_schedule_hint")}</Text>
-				)}
-			</View>
+					{bathOverdueDays > 0 && (
+						<Animated.Text
+							style={styles.overdueText}
+							entering={m.fadeIn}
+							exiting={m.exit}
+						>
+							{t("bath_overdue", { count: bathOverdueDays })}
+						</Animated.Text>
+					)}
+					{isBathDue ? (
+						<Animated.View key="mark" entering={m.fadeIn} exiting={m.exit}>
+							<Button
+								title={t("mark_bathed_today")}
+								onPress={setBathedToday}
+								disabled={busy}
+							/>
+						</Animated.View>
+					) : (
+						<Animated.Text
+							key="hint"
+							style={styles.helperText}
+							entering={m.fadeIn}
+							exiting={m.exit}
+						>
+							{t("monthly_schedule_hint")}
+						</Animated.Text>
+					)}
+				</LayoutAnimationConfig>
+			</Animated.View>
 
 			<View style={styles.card}>
 				<Text style={styles.cardTitle}>{t("history_days_between_baths")}</Text>

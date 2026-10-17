@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Alert, Button, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
@@ -10,6 +11,7 @@ import { daysBetween } from "../utils/dates";
 import { useMemo } from "react";
 import { useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
+import { useFreshIds, useMotion } from "../motion";
 
 const KINDS: CareKind[] = ["vet", "vaccination", "parasite"];
 
@@ -22,6 +24,18 @@ export default function CareScreen() {
 	const { timezone } = usePet();
 	const isFocused = useIsFocused();
 	const [formKind, setFormKind] = useState<CareKind | null>(null);
+
+	// A record added at the top of its list may enter; the first load and refreshes may not.
+	const m = useMotion();
+	const fresh: Record<CareKind, Set<number>> = {
+		vet: useFreshIds(useMemo(() => records.vet.map((r) => r.id), [records.vet])),
+		vaccination: useFreshIds(
+			useMemo(() => records.vaccination.map((r) => r.id), [records.vaccination]),
+		),
+		parasite: useFreshIds(
+			useMemo(() => records.parasite.map((r) => r.id), [records.parasite]),
+		),
+	};
 
 	const df = new Intl.DateTimeFormat(
 		i18n.language === "nb" ? "nb-NO" : "en-US",
@@ -70,7 +84,7 @@ export default function CareScreen() {
 				<Text style={styles.title}>{t("care_title")}</Text>
 
 				{KINDS.map((kind) => (
-					<View key={kind} style={styles.card}>
+					<Animated.View key={kind} style={styles.card} layout={m.layout}>
 						<Text style={styles.cardTitle}>{t(`care_section_${kind}`)}</Text>
 						<Button
 							title={t(`care_add_${kind}`)}
@@ -84,7 +98,13 @@ export default function CareScreen() {
 							records[kind].map((r) => {
 								const due = dueStatus(r);
 								return (
-									<View key={r.id} style={styles.record}>
+									<Animated.View
+										key={r.id}
+										style={styles.record}
+										entering={fresh[kind].has(r.id) ? m.careEnter : undefined}
+										exiting={m.exit}
+										layout={m.layout}
+									>
 										<View style={styles.recordText}>
 											<Text style={styles.recordTitle}>
 												{title(r) || t("care_untitled")}
@@ -106,11 +126,11 @@ export default function CareScreen() {
 										>
 											<Ionicons name="trash-outline" size={20} color={c.danger} />
 										</Pressable>
-									</View>
+									</Animated.View>
 								);
 							})
 						)}
-					</View>
+					</Animated.View>
 				))}
 			</ScrollView>
 

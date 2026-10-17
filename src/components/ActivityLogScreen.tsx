@@ -1,11 +1,15 @@
 import React, { useMemo } from "react";
-import { View, StyleSheet, FlatList, Pressable, Alert, Button, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Pressable, Alert, ActivityIndicator } from "react-native";
+import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { usePet } from "../context/PetContext";
 import { useTheme, type Colors } from "../theme";
 import { Text } from "./themed";
+import AppButton from "./AppButton";
+import TickText from "./TickText";
+import { useFreshIds, useMotion } from "../motion";
 
 type Entry = { id: number; timestamp: number };
 
@@ -45,6 +49,14 @@ export default function ActivityLogScreen({
 		[entries],
 	);
 
+	// Only rows just added at the top may play an entrance (not scroll-ins or page loads).
+	const ids = useMemo(() => sorted.map((e) => e.id), [sorted]);
+	const fresh = useFreshIds(ids);
+	const m = useMotion();
+
+	const countLabel =
+		countToday > 0 ? t("times", { count: countToday }) : t("not_yet_today");
+
 	const dtf = new Intl.DateTimeFormat(
 		i18n.language === "nb" ? "nb-NO" : "en-US",
 		{ dateStyle: "short", timeStyle: "short" },
@@ -57,8 +69,9 @@ export default function ActivityLogScreen({
 		]);
 
 	return (
-		<FlatList
+		<Animated.FlatList
 			style={styles.screen}
+			itemLayoutAnimation={m.layout}
 			contentContainerStyle={styles.content}
 			data={sorted}
 			refreshing={isFocused && refreshing}
@@ -78,14 +91,12 @@ export default function ActivityLogScreen({
 							<Text style={styles.label}>{todayLabel}</Text>
 						</Text>
 						<View style={styles.summaryRow}>
-							<Text style={styles.nameText}>
-								{name}:{" "}
-								{countToday > 0
-									? t("times", { count: countToday })
-									: t("not_yet_today")}
-							</Text>
+							<View style={styles.countRow}>
+								<Text style={styles.nameText}>{name}: </Text>
+								<TickText style={styles.nameText} value={countLabel} />
+							</View>
 						</View>
-						<Button title={logButtonLabel} onPress={onAdd} disabled={busy} />
+						<AppButton title={logButtonLabel} onPress={onAdd} disabled={busy} />
 					</View>
 
 					<View style={styles.card}>
@@ -94,7 +105,11 @@ export default function ActivityLogScreen({
 				</>
 			}
 			renderItem={({ item }) => (
-				<View style={styles.listRow}>
+				<Animated.View
+					style={styles.listRow}
+					entering={fresh.has(item.id) ? m.rowEnter : undefined}
+					exiting={m.exit}
+				>
 					<Text style={styles.listRowTitle}>
 						{dtf.format(new Date(item.timestamp))}
 					</Text>
@@ -107,7 +122,7 @@ export default function ActivityLogScreen({
 					>
 						<Ionicons name="trash-outline" size={20} color={c.danger} />
 					</Pressable>
-				</View>
+				</Animated.View>
 			)}
 			ItemSeparatorComponent={() => <View style={styles.separator} />}
 			ListEmptyComponent={
@@ -136,6 +151,7 @@ const makeStyles = (c: Colors) => StyleSheet.create({
 	label: { color: c.textSecondary, fontWeight: "600" },
 
 	summaryRow: { marginBottom: 8 },
+	countRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline" },
 	nameText: { fontSize: 16, color: c.text },
 
 	listRow: {

@@ -7,6 +7,8 @@ import WeightChart from "../components/WeightChart";
 import { useTheme, type Colors } from "../theme";
 import type { TextInput as RNTextInput } from "react-native";
 import { Text, TextInput } from "../components/themed";
+import Animated from "react-native-reanimated";
+import { useFreshIds, useMotion } from "../motion";
 
 export default function WeightScreen() {
 	const c = useTheme();
@@ -28,6 +30,12 @@ export default function WeightScreen() {
 		() => [...weights].sort((a, b) => b.timestamp - a.timestamp),
 		[weights],
 	);
+
+	// The tiles shown. A weigh-in added just now (and only that) plays an entrance.
+	const tiles = useMemo(() => sorted.slice(0, 12), [sorted]);
+	const tileIds = useMemo(() => tiles.map((w) => w.timestamp), [tiles]);
+	const fresh = useFreshIds(tileIds);
+	const m = useMotion();
 
 	const onSave = () => {
 		const normalized = input.replace(",", ".");
@@ -99,15 +107,21 @@ export default function WeightScreen() {
 						{sorted.length === 0 ? (
 							<Text style={styles.helperText}>{t("no_data_yet")}</Text>
 						) : (
-							sorted.slice(0, 12).map((w, idx) => (
-								<View key={`${w.timestamp}-${idx}`} style={styles.tile}>
+							// Keyed by timestamp, not index: an index in the key re-mounts every
+							// tile on each insert, which would replay every entrance.
+							tiles.map((w) => (
+								<Animated.View
+									key={w.timestamp}
+									style={styles.tile}
+									entering={fresh.has(w.timestamp) ? m.tileEnter : undefined}
+								>
 									<Text style={styles.tileValue}>
 										{w.weightKg.toFixed(1)} kg
 									</Text>
 									<Text style={styles.tileDate}>
 										{df.format(new Date(w.timestamp))}
 									</Text>
-								</View>
+								</Animated.View>
 							))
 						)}
 					</View>

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Button, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import DateField from "./DateField";
 import type { CareInput, CareKind, ParasiteType } from "../context/CareContext";
 import { useMemo } from "react";
 import { useTheme, type Colors } from "../theme";
 import { Text, TextInput } from "./themed";
+import { useMotion } from "../motion";
 
 type Props = {
 	kind: CareKind | null; // null = closed
@@ -18,6 +20,7 @@ const PARASITE_TYPES: ParasiteType[] = ["flea", "tick", "worm"];
 
 export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) {
 	const c = useTheme();
+	const m = useMotion();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t } = useTranslation();
 	const [name, setName] = useState("");
@@ -115,27 +118,32 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 							accessibilityLabel={t("care_set_next")}
 						/>
 					</View>
+					{/* The next-due row fades in and out; what sits below glides instead of jumping. */}
 					{hasNext && (
-						<DateField
-							label={t("care_next_due")}
-							value={nextDueAt}
-							onChange={setNextDueAt}
-						/>
+						<Animated.View entering={m.fadeIn} exiting={m.exitShort}>
+							<DateField
+								label={t("care_next_due")}
+								value={nextDueAt}
+								onChange={setNextDueAt}
+							/>
+						</Animated.View>
 					)}
 
-					<TextInput
-						style={[styles.input, styles.notes]}
-						value={notes}
-						onChangeText={setNotes}
-						placeholder={t("care_notes_placeholder")}
-						accessibilityLabel={t("care_notes_placeholder")}
-						multiline
-					/>
+					<Animated.View layout={m.layout}>
+						<TextInput
+							style={[styles.input, styles.notes]}
+							value={notes}
+							onChangeText={setNotes}
+							placeholder={t("care_notes_placeholder")}
+							accessibilityLabel={t("care_notes_placeholder")}
+							multiline
+						/>
+					</Animated.View>
 
-					<View style={styles.actions}>
+					<Animated.View style={styles.actions} layout={m.layout}>
 						<Button title={t("cancel")} onPress={onClose} color={c.textMuted} />
 						<Button title={t("save")} onPress={save} disabled={!canSave} />
-					</View>
+					</Animated.View>
 				</ScrollView>
 			</KeyboardAvoidingView>
 		</Modal>
