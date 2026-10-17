@@ -20,11 +20,17 @@ export default function CareScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { records, busy, refreshing, refresh, addRecord, removeRecord } = useCare();
+	const { records, busy, refreshing, refresh, addRecord, updateRecord, removeRecord } = useCare();
 	const { timezone } = usePet();
 	const toast = useToast();
 	const isFocused = useIsFocused();
 	const [formKind, setFormKind] = useState<CareKind | null>(null);
+	// The record being edited (formKind is its kind), or null when adding.
+	const [editing, setEditing] = useState<CareRecord | null>(null);
+	const closeForm = () => {
+		setFormKind(null);
+		setEditing(null);
+	};
 
 	// A record added at the top of its list may enter; the first load and refreshes may not.
 	const m = useMotion();
@@ -64,10 +70,22 @@ export default function CareScreen() {
 		};
 	};
 
-	// Deletes happen straight away; the toast reports how it went.
-	const remove = async (kind: CareKind, id: number) => {
-		const ok = await removeRecord(kind, id);
-		toast.show(ok ? t("entry_deleted") : t("delete_failed"), ok ? "success" : "error");
+	// Deletes happen straight away; the toast offers Undo, which adds the record back.
+	const remove = async (r: CareRecord) => {
+		const ok = await removeRecord(r.kind, r.id);
+		if (!ok) return toast.show(t("delete_failed"), "error");
+		toast.show(t("entry_deleted"), "success", {
+			label: t("entry_undo"),
+			onPress: () => {
+				addRecord(r.kind, {
+					name: r.name,
+					parasiteType: r.parasiteType ?? undefined,
+					date: new Date(r.date),
+					nextDueAt: r.nextDueAt ? new Date(r.nextDueAt) : null,
+					notes: r.notes ?? undefined,
+				});
+			},
+		});
 	};
 
 	return (
@@ -108,7 +126,16 @@ export default function CareScreen() {
 												exiting={m.exit}
 												layout={m.layout}
 											>
-												<View style={styles.recordText}>
+												<Pressable
+													onPress={() => {
+														setEditing(r);
+														setFormKind(kind);
+													}}
+													disabled={busy}
+													style={styles.recordText}
+													accessibilityRole="button"
+													accessibilityLabel={t("care_edit")}
+												>
 													<Text variant="headline">{title(r) || t("care_untitled")}</Text>
 													<Text variant="sub" tone="muted">
 														{df.format(new Date(r.date))}
@@ -123,9 +150,9 @@ export default function CareScreen() {
 															{r.notes}
 														</Text>
 													) : null}
-												</View>
+												</Pressable>
 												<Pressable
-													onPress={() => remove(kind, r.id)}
+													onPress={() => remove(r)}
 													disabled={busy}
 													hitSlop={8}
 													style={styles.trash}
@@ -146,9 +173,12 @@ export default function CareScreen() {
 
 			<CareFormModal
 				kind={formKind}
+				editing={editing}
 				busy={busy}
-				onClose={() => setFormKind(null)}
-				onSubmit={addRecord}
+				onClose={closeForm}
+				onSubmit={(kind, input) =>
+					editing ? updateRecord(kind, editing.id, input) : addRecord(kind, input)
+				}
 			/>
 		</>
 	);

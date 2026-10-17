@@ -18,9 +18,9 @@ import { useAuth } from "./AuthContext";
 
 // ===== Types expected by the rest of the app =====
 export type FeedingRecord = { id: number; timestamp: number; fed: boolean };
-export type BathRecord = { timestamp: number };
+export type BathRecord = { id: number; timestamp: number };
 export type WalkRecord = { id: number; timestamp: number; walked: boolean };
-export type WeightRecord = { timestamp: number; weightKg: number };
+export type WeightRecord = { id: number; timestamp: number; weightKg: number };
 
 export type PetContextValue = {
 	// All the dogs this person looks after, which one is active, and the loading state of that list.
@@ -58,14 +58,19 @@ export type PetContextValue = {
 	addWalk: (at?: Date) => Promise<boolean>;
 	updateWalk: (id: number, at: Date) => Promise<boolean>;
 	removeWalk: (id: number) => Promise<boolean>;
-	setBathedToday: () => Promise<boolean>;
+	// `at` backdates the bath (defaults to now).
+	setBathedToday: (at?: Date) => Promise<boolean>;
+	updateBath: (id: number, at: Date) => Promise<boolean>;
+	removeBath: (id: number) => Promise<boolean>;
 	// Days between baths (shared by everyone who owns the pet; default 30).
 	bathIntervalDays: number;
 	setBathInterval: (days: number) => Promise<boolean>;
 	nextBathDueAt: Date | null;
 	isBathDue: boolean;
 	bathOverdueDays: number;
-	setWeightToday: (weightKg: number) => Promise<boolean>;
+	setWeightToday: (weightKg: number, at?: Date) => Promise<boolean>;
+	updateWeight: (id: number, weightKg: number, at: Date) => Promise<boolean>;
+	removeWeight: (id: number) => Promise<boolean>;
 
 	// True while a save request is in flight
 	busy: boolean;
@@ -301,13 +306,14 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
 		setBaths(
 			unwrapList(bathsRaw)
-				.map((b) => ({ timestamp: Date.parse(b.bathed_at) }))
+				.map((b) => ({ id: b.id, timestamp: Date.parse(b.bathed_at) }))
 				.sort((a, b) => b.timestamp - a.timestamp),
 		);
 
 		setWeights(
 			unwrapList(weightsRaw)
 				.map((w) => ({
+					id: w.id,
 					timestamp: Date.parse(w.weighed_at),
 					weightKg: Number(w.value),
 				}))
@@ -527,17 +533,46 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	);
 
 	const setBathedToday = useCallback(
-		() =>
+		(at?: Date) =>
 			runMutation(async () => {
 				if (!pet) return;
-				const nowIso = new Date().toISOString();
-				await apiFetch("/baths", {
+				const whenIso = (at ?? new Date()).toISOString();
+				const created = await apiFetch<{ id: number; bathed_at: string }>("/baths", {
 					method: "POST",
-					body: { pet_id: pet.id, bathed_at: nowIso },
+					body: { pet_id: pet.id, bathed_at: whenIso },
 				});
-				setBaths((prev) => [{ timestamp: Date.parse(nowIso) }, ...prev]);
+				setBaths((prev) =>
+					[{ id: created.id, timestamp: Date.parse(created.bathed_at ?? whenIso) }, ...prev].sort(
+						(a, b) => b.timestamp - a.timestamp,
+					),
+				);
 			}),
 		[pet, runMutation],
+	);
+
+	const updateBath = useCallback(
+		(id: number, at: Date) =>
+			runMutation(async () => {
+				const saved = await apiFetch<ApiBath>(`/baths/${id}`, {
+					method: "PATCH",
+					body: { bathed_at: at.toISOString() },
+				});
+				setBaths((prev) =>
+					prev
+						.map((b) => (b.id === id ? { ...b, timestamp: Date.parse(saved.bathed_at) } : b))
+						.sort((a, b) => b.timestamp - a.timestamp),
+				);
+			}),
+		[runMutation],
+	);
+
+	const removeBath = useCallback(
+		(id: number) =>
+			runMutation(async () => {
+				await apiDelete(`/baths/${id}`);
+				setBaths((prev) => prev.filter((b) => b.id !== id));
+			}, { silent: true }),
+		[runMutation],
 	);
 
 	const addWalk = useCallback(
@@ -589,20 +624,52 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	);
 
 	const setWeightToday = useCallback(
-		(weightKg: number) =>
+		(weightKg: number, at?: Date) =>
 			runMutation(async () => {
 				if (!pet || !Number.isFinite(weightKg) || weightKg <= 0) return;
-				const nowIso = new Date().toISOString();
-				await apiFetch("/weights", {
+				const whenIso = (at ?? new Date()).toISOString();
+				const created = await apiFetch<ApiWeight>("/weights", {
 					method: "POST",
-					body: { pet_id: pet.id, value: weightKg, weighed_at: nowIso },
+					body: { pet_id: pet.id, value: weightKg, weighed_at: whenIso },
 				});
-				setWeights((prev) => [
-					{ timestamp: Date.parse(nowIso), weightKg },
-					...prev,
-				]);
+				setWeights((prev) =>
+					[
+						{ id: created.id, timestamp: Date.parse(created.weighed_at ?? whenIso), weightKg },
+						...prev,
+					].sort((a, b) => b.timestamp - a.timestamp),
+				);
 			}),
 		[pet, runMutation],
+	);
+
+	const updateWeight = useCallback(
+		(id: number, weightKg: number, at: Date) =>
+			runMutation(async () => {
+				if (!Number.isFinite(weightKg) || weightKg <= 0) return;
+				const saved = await apiFetch<ApiWeight>(`/weights/${id}`, {
+					method: "PATCH",
+					body: { value: weightKg, weighed_at: at.toISOString() },
+				});
+				setWeights((prev) =>
+					prev
+						.map((w) =>
+							w.id === id
+								? { ...w, weightKg: Number(saved.value), timestamp: Date.parse(saved.weighed_at) }
+								: w,
+						)
+						.sort((a, b) => b.timestamp - a.timestamp),
+				);
+			}),
+		[runMutation],
+	);
+
+	const removeWeight = useCallback(
+		(id: number) =>
+			runMutation(async () => {
+				await apiDelete(`/weights/${id}`);
+				setWeights((prev) => prev.filter((w) => w.id !== id));
+			}, { silent: true }),
+		[runMutation],
 	);
 
 	// Saves the shared bath interval. Optimistic: the schedule updates at once and rolls
@@ -763,12 +830,16 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			updateWalk,
 			removeWalk,
 			setBathedToday,
+			updateBath,
+			removeBath,
 			bathIntervalDays,
 			setBathInterval,
 			nextBathDueAt,
 			isBathDue,
 			bathOverdueDays,
 			setWeightToday,
+			updateWeight,
+			removeWeight,
 			busy,
 
 			// pull-to-refresh
@@ -801,8 +872,12 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		updateWalk,
 		removeWalk,
 		setBathedToday,
+		updateBath,
+		removeBath,
 		setBathInterval,
 		setWeightToday,
+		updateWeight,
+		removeWeight,
 		busy,
 		refresh,
 		refreshing,

@@ -44,6 +44,7 @@ type CareContextValue = {
 	refreshing: boolean;
 	refresh: () => Promise<void>;
 	addRecord: (kind: CareKind, input: CareInput) => Promise<boolean>;
+	updateRecord: (kind: CareKind, id: number, input: CareInput) => Promise<boolean>;
 	// Resolves true when the delete went through (errors are reported by the caller).
 	removeRecord: (kind: CareKind, id: number) => Promise<boolean>;
 };
@@ -255,6 +256,27 @@ export function CareProvider({ children }: { children: ReactNode }) {
 		[petId, run],
 	);
 
+	const updateRecord = useCallback(
+		(kind: CareKind, id: number, input: CareInput) =>
+			run(async () => {
+				if (petId == null) return;
+				// pet_id stays as it is; only the editable fields are sent.
+				const { pet_id: _pet, ...fields } = toApi(kind, petId, input);
+				const saved = await apiFetch<ApiRow>(`${ENDPOINT[kind]}/${id}`, {
+					method: "PATCH",
+					body: fields,
+				});
+				const row = saved?.id ? saved : { ...fields, id };
+				setRecords((prev) => ({
+					...prev,
+					[kind]: prev[kind]
+						.map((r) => (r.id === id ? fromApi(kind, row) : r))
+						.sort((a, b) => b.date - a.date),
+				}));
+			}),
+		[petId, run],
+	);
+
 	const removeRecord = useCallback(
 		(kind: CareKind, id: number) =>
 			run(
@@ -280,8 +302,8 @@ export function CareProvider({ children }: { children: ReactNode }) {
 	}, [records, petId, token]);
 
 	const value = useMemo(
-		() => ({ records, busy, refreshing, refresh, addRecord, removeRecord }),
-		[records, busy, refreshing, refresh, addRecord, removeRecord],
+		() => ({ records, busy, refreshing, refresh, addRecord, updateRecord, removeRecord }),
+		[records, busy, refreshing, refresh, addRecord, updateRecord, removeRecord],
 	);
 
 	return <CareContext.Provider value={value}>{children}</CareContext.Provider>;

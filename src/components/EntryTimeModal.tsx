@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -16,10 +16,21 @@ type Props = {
 	onClose: () => void;
 	// Resolves true when saved; the sheet closes then and stays open on failure.
 	onSave: (at: Date) => Promise<boolean>;
+	// Extra rows above the date and time (for example a weight), and whether they allow saving.
+	children?: ReactNode;
+	canSave?: boolean;
 };
 
 // Pick when something happened: used to log an entry after the fact or to move one.
-export default function EntryTimeModal({ visible, title, initial, onClose, onSave }: Props) {
+export default function EntryTimeModal({
+	visible,
+	title,
+	initial,
+	onClose,
+	onSave,
+	children,
+	canSave = true,
+}: Props) {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t } = useTranslation();
@@ -63,6 +74,7 @@ export default function EntryTimeModal({ visible, title, initial, onClose, onSav
 					</Pressable>
 				</View>
 				<Group>
+					{children}
 					<DateField
 						label={t("entry_date")}
 						value={value}
@@ -78,7 +90,12 @@ export default function EntryTimeModal({ visible, title, initial, onClose, onSav
 					/>
 				</Group>
 				<View style={styles.actions}>
-					<AppButton title={t("save")} onPress={save} loading={saving} disabled={saving} />
+					<AppButton
+						title={t("save")}
+						onPress={save}
+						loading={saving}
+						disabled={saving || !canSave}
+					/>
 				</View>
 			</View>
 		</Modal>

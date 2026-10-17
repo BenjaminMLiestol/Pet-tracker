@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleShee
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import DateField from "./DateField";
-import type { CareInput, CareKind, ParasiteType } from "../context/CareContext";
+import type { CareInput, CareKind, CareRecord, ParasiteType } from "../context/CareContext";
 import { useMemo } from "react";
 import { radius, smooth, space, useTheme, type Colors } from "../theme";
 import { Text, TextInput } from "./themed";
@@ -13,6 +13,8 @@ import { Group } from "./ui";
 
 type Props = {
 	kind: CareKind | null; // null = closed
+	// A record being edited: the form opens filled in with it.
+	editing?: CareRecord | null;
 	busy: boolean;
 	onClose: () => void;
 	onSubmit: (kind: CareKind, input: CareInput) => Promise<boolean>;
@@ -20,7 +22,7 @@ type Props = {
 
 const PARASITE_TYPES: ParasiteType[] = ["flea", "tick", "worm"];
 
-export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) {
+export default function CareFormModal({ kind, editing, busy, onClose, onSubmit }: Props) {
 	const c = useTheme();
 	const m = useMotion();
 	const styles = useMemo(() => makeStyles(c), [c]);
@@ -35,14 +37,14 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 	// Reset whenever the form is opened.
 	useEffect(() => {
 		if (kind) {
-			setName("");
-			setParasiteType("flea");
-			setDate(new Date());
-			setHasNext(false);
-			setNextDueAt(defaultNext());
-			setNotes("");
+			setName(editing?.name ?? "");
+			setParasiteType(editing?.parasiteType ?? "flea");
+			setDate(editing ? new Date(editing.date) : new Date());
+			setHasNext(editing?.nextDueAt != null);
+			setNextDueAt(editing?.nextDueAt ? new Date(editing.nextDueAt) : defaultNext());
+			setNotes(editing?.notes ?? "");
 		}
-	}, [kind]);
+	}, [kind, editing]);
 
 	if (!kind) return null;
 
@@ -77,7 +79,7 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 					keyboardDismissMode="interactive"
 				>
 					<Text variant="title" style={styles.title}>
-						{t(`care_add_${kind}`)}
+						{editing ? t("care_edit") : t(`care_add_${kind}`)}
 					</Text>
 
 					{kind === "parasite" && (

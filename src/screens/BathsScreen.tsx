@@ -1,13 +1,17 @@
-import React, { useMemo } from "react";
-import { StyleSheet, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
-import { usePet } from "../context/PetContext";
+import { usePet, type BathRecord } from "../context/PetContext";
 import AppButton from "../components/AppButton";
+import EntryTimeModal from "../components/EntryTimeModal";
 import { Text } from "../components/themed";
-import { Screen, Section, Surface } from "../components/ui";
-import { useMotion } from "../motion";
+import { useToast } from "../components/Toast";
+import { Group, Screen, Section, Surface } from "../components/ui";
+import { useFreshIds, useMotion } from "../motion";
+import { formatDay } from "../utils/dates";
 import { radius, smooth, space, type, useTheme, type Colors } from "../theme";
 
 const BAR_AREA = 120;
@@ -24,9 +28,15 @@ export default function BathsScreen() {
 		bathIntervalDays,
 		busy,
 		setBathedToday,
+		updateBath,
+		removeBath,
 		refresh,
 		refreshing,
+		timezone,
 	} = usePet();
+	const toast = useToast();
+	// The time sheet logs an earlier bath (editing === null) or moves one.
+	const [sheet, setSheet] = useState<{ editing: BathRecord | null } | null>(null);
 	const isFocused = useIsFocused();
 	const m = useMotion();
 
@@ -47,6 +57,24 @@ export default function BathsScreen() {
 		}
 		return days.slice(0, 8);
 	}, [sorted]);
+
+	const rowIds = useMemo(() => sorted.map((b) => b.id), [sorted]);
+	const fresh = useFreshIds(rowIds);
+	const locale = i18n.language === "nb" ? "nb-NO" : "en-GB";
+	const labels = { today: t("today"), yesterday: t("yesterday") };
+
+	// Deletes happen straight away; the toast offers Undo, which logs the bath again.
+	const remove = async (bath: BathRecord) => {
+		const ok = await removeBath(bath.id);
+		if (!ok) return toast.show(t("delete_failed"), "error");
+		toast.show(t("entry_deleted"), "success", {
+			label: t("entry_undo"),
+			onPress: () => {
+				setBathedToday(new Date(bath.timestamp));
+			},
+		});
+	};
+	const editing = sheet?.editing ?? null;
 
 	const maxInterval = Math.max(1, ...intervalsDays);
 	const df = new Intl.DateTimeFormat(i18n.language === "nb" ? "nb-NO" : "en-GB", {
@@ -87,7 +115,7 @@ export default function BathsScreen() {
 							>
 								<AppButton
 									title={t("mark_bathed_today")}
-									onPress={setBathedToday}
+									onPress={() => setBathedToday()}
 									disabled={busy}
 									icon="water"
 								/>
@@ -135,6 +163,72 @@ export default function BathsScreen() {
 					)}
 				</Surface>
 			</Section>
+
+			<Section
+				label={t("history")}
+				right={
+					<Pressable
+						onPress={() => setSheet({ editing: null })}
+						disabled={busy}
+						hitSlop={8}
+						style={[styles.add, busy && styles.disabled]}
+						accessibilityRole="button"
+						accessibilityLabel={t("log_earlier")}
+					>
+						<Ionicons name="add" size={20} color={c.text} />
+					</Pressable>
+				}
+			>
+				{sorted.length === 0 ? (
+					<Surface style={styles.empty}>
+						<Text variant="sub" tone="muted">
+							{t("no_data_yet")}
+						</Text>
+					</Surface>
+				) : (
+					<Group>
+						{sorted.map((b) => (
+							<Animated.View
+								key={b.id}
+								style={styles.historyRow}
+								entering={fresh.has(b.id) ? m.rowEnter : undefined}
+								exiting={m.exit}
+								layout={m.layout}
+							>
+								<Pressable
+									onPress={() => setSheet({ editing: b })}
+									disabled={busy}
+									style={styles.when}
+									accessibilityRole="button"
+									accessibilityLabel={t("entry_edit_title")}
+								>
+									<Text variant="body" style={type.numeric}>
+										{formatDay(b.timestamp, timezone, locale, labels)}
+									</Text>
+								</Pressable>
+								<Pressable
+									onPress={() => remove(b)}
+									disabled={busy}
+									hitSlop={8}
+									style={styles.trash}
+									accessibilityRole="button"
+									accessibilityLabel={t("delete")}
+								>
+									<Ionicons name="trash-outline" size={20} color={c.textMuted} />
+								</Pressable>
+							</Animated.View>
+						))}
+					</Group>
+				)}
+			</Section>
+
+			<EntryTimeModal
+				visible={sheet !== null}
+				title={editing ? t("entry_edit_title") : t("log_earlier")}
+				initial={editing ? new Date(editing.timestamp) : new Date()}
+				onClose={() => setSheet(null)}
+				onSave={(at) => (editing ? updateBath(editing.id, at) : setBathedToday(at))}
+			/>
 		</Screen>
 	);
 }
@@ -148,6 +242,27 @@ const makeStyles = (c: Colors) =>
 		hint: { color: c.textMuted, fontSize: 15, lineHeight: 20, marginTop: space[1] },
 		action: { marginTop: space[4] },
 		chart: { padding: space[5] },
+		add: {
+			width: 32,
+			height: 32,
+			borderRadius: 16,
+			alignItems: "center",
+			justifyContent: "center",
+			backgroundColor: c.surface,
+		},
+		disabled: { opacity: 0.4 },
+		empty: { padding: space[5], alignItems: "center" },
+		historyRow: {
+			flexDirection: "row",
+			alignItems: "center",
+			justifyContent: "space-between",
+			minHeight: 52,
+			paddingLeft: space[4],
+			paddingRight: space[1],
+			backgroundColor: c.surface,
+		},
+		when: { flex: 1, minHeight: 52, justifyContent: "center" },
+		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 		bars: {
 			flexDirection: "row",
 			alignItems: "flex-end",

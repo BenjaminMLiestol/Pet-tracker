@@ -1,12 +1,15 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Keyboard, StyleSheet, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { TextInput as RNTextInput } from "react-native";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
-import { usePet } from "../context/PetContext";
+import { usePet, type WeightRecord } from "../context/PetContext";
 import WeightChart from "../components/WeightChart";
 import AppButton from "../components/AppButton";
+import EntryTimeModal from "../components/EntryTimeModal";
+import { useToast } from "../components/Toast";
 import { Text, TextInput } from "../components/themed";
 import { Group, Screen, Section, Surface } from "../components/ui";
 import { useFreshIds, useMotion } from "../motion";
@@ -17,8 +20,21 @@ export default function WeightScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { currentWeightKg, weights, setWeightToday, busy, refresh, refreshing, timezone } =
-		usePet();
+	const {
+		currentWeightKg,
+		weights,
+		setWeightToday,
+		updateWeight,
+		removeWeight,
+		busy,
+		refresh,
+		refreshing,
+		timezone,
+	} = usePet();
+	const toast = useToast();
+	// The sheet logs a weigh-in for another day (editing === null) or edits one.
+	const [sheet, setSheet] = useState<{ editing: WeightRecord | null } | null>(null);
+	const [sheetKg, setSheetKg] = useState("");
 	const [input, setInput] = useState("");
 	const inputRef = useRef<RNTextInput>(null);
 	const isFocused = useIsFocused();
@@ -30,7 +46,7 @@ export default function WeightScreen() {
 
 	// The rows shown. A weigh-in added just now (and only that) plays an entrance.
 	const rows = useMemo(() => sorted.slice(0, 12), [sorted]);
-	const rowIds = useMemo(() => rows.map((w) => w.timestamp), [rows]);
+	const rowIds = useMemo(() => rows.map((w) => w.id), [rows]);
 	const fresh = useFreshIds(rowIds);
 	const m = useMotion();
 
@@ -42,6 +58,26 @@ export default function WeightScreen() {
 		setInput("");
 		inputRef.current?.blur();
 		Keyboard.dismiss();
+	};
+
+	const parseKg = (text: string) => Number(text.replace(",", "."));
+	const sheetKgValid = Number.isFinite(parseKg(sheetKg)) && parseKg(sheetKg) > 0;
+	const editing = sheet?.editing ?? null;
+	const openSheet = (w: WeightRecord | null) => {
+		setSheetKg(w ? String(w.weightKg) : "");
+		setSheet({ editing: w });
+	};
+
+	// Deletes happen straight away; the toast offers Undo, which logs the weigh-in again.
+	const remove = async (w: WeightRecord) => {
+		const ok = await removeWeight(w.id);
+		if (!ok) return toast.show(t("delete_failed"), "error");
+		toast.show(t("entry_deleted"), "success", {
+			label: t("entry_undo"),
+			onPress: () => {
+				setWeightToday(w.weightKg, new Date(w.timestamp));
+			},
+		});
 	};
 
 	const locale = i18n.language === "nb" ? "nb-NO" : "en-GB";
@@ -92,7 +128,21 @@ export default function WeightScreen() {
 				</View>
 			</Section>
 
-			<Section label={t("history")}>
+			<Section
+				label={t("history")}
+				right={
+					<Pressable
+						onPress={() => openSheet(null)}
+						disabled={busy}
+						hitSlop={8}
+						style={[styles.add, busy && styles.disabled]}
+						accessibilityRole="button"
+						accessibilityLabel={t("weight_log_title")}
+					>
+						<Ionicons name="add" size={20} color={c.text} />
+					</Pressable>
+				}
+			>
 				{rows.length === 0 ? (
 					<Surface style={styles.empty}>
 						<Text variant="sub" tone="muted">
@@ -103,21 +153,64 @@ export default function WeightScreen() {
 					<Group>
 						{rows.map((w) => (
 							<Animated.View
-								key={w.timestamp}
+								key={w.id}
 								style={styles.historyRow}
-								entering={fresh.has(w.timestamp) ? m.rowEnter : undefined}
+								entering={fresh.has(w.id) ? m.rowEnter : undefined}
+								exiting={m.exit}
+								layout={m.layout}
 							>
-								<Text variant="body" style={type.numeric}>
-									{w.weightKg.toFixed(1)} kg
-								</Text>
-								<Text variant="sub" tone="muted">
-									{formatDay(w.timestamp, timezone, locale, labels)}
-								</Text>
+								<Pressable
+									onPress={() => openSheet(w)}
+									disabled={busy}
+									style={styles.rowMain}
+									accessibilityRole="button"
+									accessibilityLabel={t("weight_edit_title")}
+								>
+									<Text variant="body" style={type.numeric}>
+										{w.weightKg.toFixed(1)} kg
+									</Text>
+									<Text variant="sub" tone="muted">
+										{formatDay(w.timestamp, timezone, locale, labels)}
+									</Text>
+								</Pressable>
+								<Pressable
+									onPress={() => remove(w)}
+									disabled={busy}
+									hitSlop={8}
+									style={styles.trash}
+									accessibilityRole="button"
+									accessibilityLabel={t("delete")}
+								>
+									<Ionicons name="trash-outline" size={20} color={c.textMuted} />
+								</Pressable>
 							</Animated.View>
 						))}
 					</Group>
 				)}
 			</Section>
+
+			<EntryTimeModal
+				visible={sheet !== null}
+				title={editing ? t("weight_edit_title") : t("weight_log_title")}
+				initial={editing ? new Date(editing.timestamp) : new Date()}
+				canSave={sheetKgValid}
+				onClose={() => setSheet(null)}
+				onSave={(at) =>
+					editing
+						? updateWeight(editing.id, parseKg(sheetKg), at)
+						: setWeightToday(parseKg(sheetKg), at)
+				}
+			>
+				<TextInput
+					style={styles.sheetInput}
+					value={sheetKg}
+					onChangeText={setSheetKg}
+					placeholder={t("weight_kg_label")}
+					accessibilityLabel={t("weight_kg_label")}
+					keyboardType="decimal-pad"
+					returnKeyType="done"
+				/>
+			</EntryTimeModal>
 		</Screen>
 	);
 }
@@ -143,10 +236,29 @@ const makeStyles = (c: Colors) =>
 		historyRow: {
 			flexDirection: "row",
 			alignItems: "center",
-			justifyContent: "space-between",
 			minHeight: 52,
-			paddingHorizontal: space[4],
+			paddingLeft: space[4],
+			paddingRight: space[1],
 			backgroundColor: c.surface,
 		},
+		rowMain: {
+			flex: 1,
+			flexDirection: "row",
+			alignItems: "center",
+			justifyContent: "space-between",
+			minHeight: 52,
+			paddingRight: space[3],
+		},
+		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+		add: {
+			width: 32,
+			height: 32,
+			borderRadius: 16,
+			alignItems: "center",
+			justifyContent: "center",
+			backgroundColor: c.surface,
+		},
+		disabled: { opacity: 0.4 },
+		sheetInput: { minHeight: 52, paddingHorizontal: space[4], fontSize: 17 },
 		empty: { padding: space[5], alignItems: "center" },
 	});
