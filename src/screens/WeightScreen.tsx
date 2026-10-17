@@ -1,21 +1,16 @@
 import React, { useMemo, useRef, useState } from "react";
-import {
-	View,
-	Text,
-	StyleSheet,
-	TextInput,
-	Button,
-	Keyboard,
-	TouchableWithoutFeedback,
-	ScrollView,
-	RefreshControl,
-} from "react-native";
+import { View, StyleSheet, Button, Keyboard, TouchableWithoutFeedback, ScrollView, RefreshControl } from "react-native";
 import { usePet } from "../context/PetContext";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import WeightChart from "../components/WeightChart";
+import { useTheme, type Colors } from "../theme";
+import type { TextInput as RNTextInput } from "react-native";
+import { Text, TextInput } from "../components/themed";
 
 export default function WeightScreen() {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const {
 		currentWeightKg,
@@ -26,7 +21,7 @@ export default function WeightScreen() {
 		refreshing,
 	} = usePet();
 	const [input, setInput] = useState("");
-	const inputRef = useRef<TextInput>(null);
+	const inputRef = useRef<RNTextInput>(null);
 	const isFocused = useIsFocused();
 
 	const sorted = useMemo(
@@ -121,11 +116,11 @@ export default function WeightScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Colors) => StyleSheet.create({
 	// Use this for the ScrollView itself (container)
 	screen: {
 		flex: 1,
-		backgroundColor: "#fff",
+		backgroundColor: c.bg,
 	},
 	// Use this for layout & padding inside the ScrollView
 	content: {
@@ -136,8 +131,8 @@ const styles = StyleSheet.create({
 
 	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
 	card: {
-		backgroundColor: "#f9fafb",
-		borderColor: "#e5e7eb",
+		backgroundColor: c.surface,
+		borderColor: c.border,
 		borderWidth: 1,
 		borderRadius: 12,
 		padding: 16,
@@ -145,12 +140,12 @@ const styles = StyleSheet.create({
 	},
 	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
 	row: { fontSize: 16, marginBottom: 8 },
-	label: { color: "#374151", fontWeight: "600" },
+	label: { color: c.textSecondary, fontWeight: "600" },
 	formRow: { flexDirection: "row", alignItems: "center", gap: 8 },
 	input: {
 		flex: 1,
 		borderWidth: 1,
-		borderColor: "#d1d5db",
+		borderColor: c.borderStrong,
 		borderRadius: 8,
 		paddingHorizontal: 12,
 		paddingVertical: 8,
@@ -164,8 +159,8 @@ const styles = StyleSheet.create({
 	},
 	tile: {
 		width: "48%",
-		backgroundColor: "#ecfeff",
-		borderColor: "#bae6fd",
+		backgroundColor: c.infoBg,
+		borderColor: c.infoBorder,
 		borderWidth: 1,
 		borderRadius: 10,
 		padding: 12,
@@ -174,9 +169,9 @@ const styles = StyleSheet.create({
 	tileValue: {
 		fontSize: 18,
 		fontWeight: "700",
-		color: "#0f766e",
+		color: c.infoText,
 		marginBottom: 4,
 	},
-	tileDate: { fontSize: 12, color: "#374151" },
-	helperText: { color: "#6b7280" },
+	tileDate: { fontSize: 12, color: c.textSecondary },
+	helperText: { color: c.textMuted },
 });

@@ -1,20 +1,11 @@
 import React, { useEffect, useState } from "react";
-import {
-	Button,
-	KeyboardAvoidingView,
-	Modal,
-	Platform,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	Switch,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
+import { Button, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import DateField from "./DateField";
 import type { CareInput, CareKind, ParasiteType } from "../context/CareContext";
+import { useMemo } from "react";
+import { useTheme, type Colors } from "../theme";
+import { Text, TextInput } from "./themed";
 
 type Props = {
 	kind: CareKind | null; // null = closed
@@ -26,6 +17,8 @@ type Props = {
 const PARASITE_TYPES: ParasiteType[] = ["flea", "tick", "worm"];
 
 export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t } = useTranslation();
 	const [name, setName] = useState("");
 	const [parasiteType, setParasiteType] = useState<ParasiteType>("flea");
@@ -131,7 +124,7 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 					/>
 
 					<View style={styles.actions}>
-						<Button title={t("cancel")} onPress={onClose} color="#6b7280" />
+						<Button title={t("cancel")} onPress={onClose} color={c.textMuted} />
 						<Button title={t("save")} onPress={save} disabled={!canSave} />
 					</View>
 				</ScrollView>
@@ -146,39 +139,39 @@ function defaultNext(): Date {
 	return d;
 }
 
-const styles = StyleSheet.create({
-	flex: { flex: 1, backgroundColor: "#fff" },
+const makeStyles = (c: Colors) => StyleSheet.create({
+	flex: { flex: 1, backgroundColor: c.bg },
 	content: { padding: 20 },
 	title: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
 	input: {
 		borderWidth: 1,
-		borderColor: "#e5e7eb",
+		borderColor: c.border,
 		borderRadius: 12,
 		padding: 12,
 		fontSize: 16,
 		marginBottom: 12,
-		backgroundColor: "#fff",
+		backgroundColor: c.bg,
 	},
 	notes: { minHeight: 80, textAlignVertical: "top" },
 	chips: { flexDirection: "row", marginBottom: 12 },
 	chip: {
 		borderWidth: 1,
-		borderColor: "#e5e7eb",
+		borderColor: c.border,
 		borderRadius: 999,
 		paddingHorizontal: 14,
 		paddingVertical: 8,
 		marginRight: 8,
 	},
-	chipActive: { backgroundColor: "#2563eb", borderColor: "#2563eb" },
-	chipText: { color: "#374151", fontWeight: "600" },
-	chipTextActive: { color: "#fff" },
+	chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+	chipText: { color: c.textSecondary, fontWeight: "600" },
+	chipTextActive: { color: c.onPrimary },
 	switchRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 		marginBottom: 12,
 	},
-	switchLabel: { fontSize: 16, color: "#374151", fontWeight: "600" },
+	switchLabel: { fontSize: 16, color: c.textSecondary, fontWeight: "600" },
 	actions: {
 		flexDirection: "row",
 		justifyContent: "space-between",

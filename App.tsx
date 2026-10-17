@@ -1,8 +1,8 @@
 // App.tsx (updated)
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { NavigationContainer, DefaultTheme, DarkTheme, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,19 +21,36 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import { useTranslation } from 'react-i18next';
 import './src/i18n';           // ensure module is loaded
 import { initI18n } from './src/i18n';
+import { useMemo } from "react";
+import { useTheme, type Colors } from "./src/theme";
+import { Text } from "./src/components/themed";
 
-const LightTheme: Theme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: '#ffffff',
-    text: '#111111',
-    primary: '#2563eb',
-    card: '#ffffff',
-    border: '#e5e7eb',
-    notification: '#2563eb',
-  },
-};
+function useNavigationTheme(): Theme {
+  const c = useTheme();
+  const base = c.isDark ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    colors: {
+      ...base.colors,
+      background: c.bg,
+      text: c.text,
+      primary: c.primary,
+      card: c.bg,
+      border: c.border,
+      notification: c.primary,
+    },
+  };
+}
+
+function ThemedNavigation({ children }: { children: React.ReactNode }) {
+  const theme = useNavigationTheme();
+  return (
+    <NavigationContainer theme={theme}>
+      <StatusBar style={theme.dark ? 'light' : 'dark'} />
+      {children}
+    </NavigationContainer>
+  );
+}
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -42,7 +59,7 @@ function AppTabs() {
   const [ready, setReady] = useState(false);
   const { logout } = useAuth();
   const { t } = useTranslation();
-
+  const c = useTheme();
 
    useEffect(() => {
     (async () => {
@@ -62,11 +79,11 @@ function AppTabs() {
         headerTitleAlign: 'center',
         headerRight: () => (
           <Pressable onPress={logout} style={{ paddingRight: 16 }}>
-            <Ionicons name="log-out-outline" size={20} color="#111" />
+            <Ionicons name="log-out-outline" size={20} color={c.text} />
           </Pressable>
         ),
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: c.primary,
+        tabBarInactiveTintColor: c.textMuted,
         tabBarLabel:
           route.name === 'Home'    ? t('tabs_home')   :
           route.name === 'Feeding' ? t('tabs_feeding'):
@@ -130,10 +147,9 @@ export default function App() {
       <PetProvider>
         <RemindersProvider>
           <CareProvider>
-            <NavigationContainer theme={LightTheme}>
-              <StatusBar style="dark" />
+            <ThemedNavigation>
               <RootNavigator />
-            </NavigationContainer>
+            </ThemedNavigation>
           </CareProvider>
         </RemindersProvider>
       </PetProvider>
@@ -142,16 +158,18 @@ export default function App() {
 }
 
 function HeaderTitle() {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
   const { name } = usePet();
   return (
     <View style={styles.headerTitleContainer}>
-      <Ionicons name="paw" size={22} color="#111" style={styles.headerIcon} />
+      <Ionicons name="paw" size={22} color={c.text} style={styles.headerIcon} />
       <Text style={styles.headerTitleText}>{name}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Colors) => StyleSheet.create({
   headerTitleContainer: { flexDirection: 'row', alignItems: 'center' },
   headerIcon: { marginRight: 8 },
   headerTitleText: { fontSize: 18, fontWeight: '700' },

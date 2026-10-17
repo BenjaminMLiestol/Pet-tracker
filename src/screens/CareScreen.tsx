@@ -1,14 +1,5 @@
 import React, { useState } from "react";
-import {
-	Alert,
-	Button,
-	Pressable,
-	RefreshControl,
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { Alert, Button, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
@@ -16,10 +7,15 @@ import { useCare, type CareKind, type CareRecord } from "../context/CareContext"
 import CareFormModal from "../components/CareFormModal";
 import { usePet } from "../context/PetContext";
 import { daysBetween } from "../utils/dates";
+import { useMemo } from "react";
+import { useTheme, type Colors } from "../theme";
+import { Text } from "../components/themed";
 
 const KINDS: CareKind[] = ["vet", "vaccination", "parasite"];
 
 export default function CareScreen() {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const { records, busy, refreshing, refresh, addRecord, removeRecord } =
 		useCare();
@@ -43,11 +39,11 @@ export default function CareScreen() {
 		if (!r.nextDueAt) return null;
 		const diff = daysBetween(Date.now(), r.nextDueAt, timezone);
 		if (diff < 0)
-			return { text: t("care_overdue", { count: -diff }), color: "#dc2626" };
-		if (diff === 0) return { text: t("care_due_today"), color: "#d97706" };
+			return { text: t("care_overdue", { count: -diff }), color: c.danger };
+		if (diff === 0) return { text: t("care_due_today"), color: c.warning };
 		return {
 			text: `${t("care_next_due")}: ${df.format(new Date(r.nextDueAt))}`,
-			color: diff <= 14 ? "#d97706" : "#6b7280",
+			color: diff <= 14 ? c.warning : c.textMuted,
 		};
 	};
 
@@ -108,7 +104,7 @@ export default function CareScreen() {
 											accessibilityRole="button"
 											accessibilityLabel={t("delete")}
 										>
-											<Ionicons name="trash-outline" size={20} color="#ef4444" />
+											<Ionicons name="trash-outline" size={20} color={c.danger} />
 										</Pressable>
 									</View>
 								);
@@ -128,20 +124,20 @@ export default function CareScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
-	screen: { flex: 1, backgroundColor: "#fff" },
+const makeStyles = (c: Colors) => StyleSheet.create({
+	screen: { flex: 1, backgroundColor: c.bg },
 	content: { padding: 16, alignItems: "stretch", justifyContent: "flex-start" },
 	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
 	card: {
-		backgroundColor: "#f9fafb",
-		borderColor: "#e5e7eb",
+		backgroundColor: c.surface,
+		borderColor: c.border,
 		borderWidth: 1,
 		borderRadius: 12,
 		padding: 16,
 		marginBottom: 12,
 	},
 	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-	helperText: { color: "#6b7280", paddingTop: 12 },
+	helperText: { color: c.textMuted, paddingTop: 12 },
 	record: {
 		flexDirection: "row",
 		alignItems: "flex-start",
@@ -149,10 +145,10 @@ const styles = StyleSheet.create({
 		paddingTop: 12,
 		marginTop: 12,
 		borderTopWidth: 1,
-		borderTopColor: "#e5e7eb",
+		borderTopColor: c.border,
 	},
 	recordText: { flex: 1, marginRight: 12 },
-	recordTitle: { fontSize: 16, color: "#111827", fontWeight: "600" },
-	recordMeta: { color: "#6b7280", marginTop: 2 },
-	recordNotes: { color: "#374151", marginTop: 4 },
+	recordTitle: { fontSize: 16, color: c.text, fontWeight: "600" },
+	recordMeta: { color: c.textMuted, marginTop: 2 },
+	recordNotes: { color: c.textSecondary, marginTop: 4 },
 });

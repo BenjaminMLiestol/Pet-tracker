@@ -1,18 +1,11 @@
 import React, { useMemo } from "react";
-import {
-	View,
-	Text,
-	StyleSheet,
-	FlatList,
-	Pressable,
-	Alert,
-	Button,
-	ActivityIndicator,
-} from "react-native";
+import { View, StyleSheet, FlatList, Pressable, Alert, Button, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { usePet } from "../context/PetContext";
+import { useTheme, type Colors } from "../theme";
+import { Text } from "./themed";
 
 type Entry = { id: number; timestamp: number };
 
@@ -41,6 +34,8 @@ export default function ActivityLogScreen({
 	onLoadMore,
 	loadingMore,
 }: Props) {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const { name, busy, refresh, refreshing } = usePet();
 	const isFocused = useIsFocused();
@@ -110,7 +105,7 @@ export default function ActivityLogScreen({
 						accessibilityRole="button"
 						accessibilityLabel={t("delete")}
 					>
-						<Ionicons name="trash-outline" size={20} color="#ef4444" />
+						<Ionicons name="trash-outline" size={20} color={c.danger} />
 					</Pressable>
 				</View>
 			)}
@@ -122,15 +117,15 @@ export default function ActivityLogScreen({
 	);
 }
 
-const styles = StyleSheet.create({
-	screen: { flex: 1, backgroundColor: "#fff" },
+const makeStyles = (c: Colors) => StyleSheet.create({
+	screen: { flex: 1, backgroundColor: c.bg },
 	content: { padding: 16, alignItems: "stretch", justifyContent: "flex-start" },
 
 	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
 
 	card: {
-		backgroundColor: "#f9fafb",
-		borderColor: "#e5e7eb",
+		backgroundColor: c.surface,
+		borderColor: c.border,
 		borderWidth: 1,
 		borderRadius: 12,
 		padding: 16,
@@ -138,22 +133,22 @@ const styles = StyleSheet.create({
 	},
 	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
 	row: { fontSize: 16, marginBottom: 8 },
-	label: { color: "#374151", fontWeight: "600" },
+	label: { color: c.textSecondary, fontWeight: "600" },
 
 	summaryRow: { marginBottom: 8 },
-	nameText: { fontSize: 16, color: "#111827" },
+	nameText: { fontSize: 16, color: c.text },
 
 	listRow: {
-		backgroundColor: "#fff",
+		backgroundColor: c.bg,
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 		paddingVertical: 12,
 		paddingHorizontal: 4,
 	},
-	listRowTitle: { color: "#111827" },
-	separator: { height: 1, backgroundColor: "#e5e7eb" },
+	listRowTitle: { color: c.text },
+	separator: { height: 1, backgroundColor: c.border },
 
 	footer: { paddingVertical: 16 },
-	helperText: { color: "#6b7280", paddingVertical: 8 },
+	helperText: { color: c.textMuted, paddingVertical: 8 },
 });

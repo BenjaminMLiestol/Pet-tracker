@@ -1,17 +1,14 @@
 import React, { useMemo } from "react";
-import {
-	View,
-	Text,
-	StyleSheet,
-	Button,
-	ScrollView,
-	RefreshControl,
-} from "react-native";
+import { View, StyleSheet, Button, ScrollView, RefreshControl } from "react-native";
 import { usePet } from "../context/PetContext";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
+import { useTheme, type Colors } from "../theme";
+import { Text } from "../components/themed";
 
 export default function BathsScreen() {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const {
 		baths,
@@ -109,11 +106,11 @@ export default function BathsScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Colors) => StyleSheet.create({
 	// ScrollView container
 	screen: {
 		flex: 1,
-		backgroundColor: "#fff",
+		backgroundColor: c.bg,
 	},
 	// Inner layout for ScrollView
 	content: {
@@ -124,8 +121,8 @@ const styles = StyleSheet.create({
 
 	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
 	card: {
-		backgroundColor: "#f9fafb",
-		borderColor: "#e5e7eb",
+		backgroundColor: c.surface,
+		borderColor: c.border,
 		borderWidth: 1,
 		borderRadius: 12,
 		padding: 16,
@@ -133,12 +130,12 @@ const styles = StyleSheet.create({
 	},
 	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
 	row: { fontSize: 16, marginBottom: 8 },
-	label: { color: "#374151", fontWeight: "600" },
-	overdueText: { color: "#dc2626", fontWeight: "600", marginBottom: 8 },
-	helperText: { color: "#6b7280", marginTop: 8 },
+	label: { color: c.textSecondary, fontWeight: "600" },
+	overdueText: { color: c.danger, fontWeight: "600", marginBottom: 8 },
+	helperText: { color: c.textMuted, marginTop: 8 },
 	chartContainer: { height: 120 },
 	chartBars: { flex: 1, flexDirection: "row", alignItems: "flex-end" },
 	barWrapper: { width: 28, alignItems: "center", marginRight: 8 },
-	bar: { width: 20, backgroundColor: "#60a5fa", borderRadius: 6 },
-	barLabel: { marginTop: 6, fontSize: 12, color: "#111827" },
+	bar: { width: 20, backgroundColor: c.chart, borderRadius: 6 },
+	barLabel: { marginTop: 6, fontSize: 12, color: c.text },
 });

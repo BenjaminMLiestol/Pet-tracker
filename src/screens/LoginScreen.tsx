@@ -1,17 +1,14 @@
 import { useState } from "react";
-import {
-	View,
-	Text,
-	TextInput,
-	Pressable,
-	StyleSheet,
-	ActivityIndicator,
-	Alert,
-} from "react-native";
+import { View, Pressable, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
+import { useMemo } from "react";
+import { useTheme, type Colors } from "../theme";
+import { Text, TextInput } from "../components/themed";
 
 const LoginScreen: React.FC = () => {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t } = useTranslation();
 	const { login } = useAuth();
 	const [email, setEmail] = useState(""); // prefill for dev if you want
@@ -70,7 +67,7 @@ const LoginScreen: React.FC = () => {
 
 export default LoginScreen;
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Colors) => StyleSheet.create({
 	container: { flex: 1, padding: 24, justifyContent: "center" },
 	title: {
 		fontSize: 24,
@@ -80,18 +77,18 @@ const styles = StyleSheet.create({
 	},
 	input: {
 		borderWidth: 1,
-		borderColor: "#e5e7eb",
+		borderColor: c.border,
 		borderRadius: 12,
 		padding: 12,
 		marginBottom: 12,
 		fontSize: 16,
-		backgroundColor: "#fff",
+		backgroundColor: c.bg,
 	},
 	button: {
-		backgroundColor: "#2563eb",
+		backgroundColor: c.primary,
 		paddingVertical: 14,
 		borderRadius: 12,
 		alignItems: "center",
 	},
-	buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+	buttonText: { color: c.onPrimary, fontWeight: "700", fontSize: 16 },
 });

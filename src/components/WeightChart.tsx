@@ -1,14 +1,19 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, type LayoutChangeEvent } from "react-native";
+import { View, StyleSheet, type LayoutChangeEvent } from "react-native";
 import Svg, { Circle, Line, Polyline, Text as SvgText } from "react-native-svg";
 import { useTranslation } from "react-i18next";
 import type { WeightRecord } from "../context/PetContext";
+import { useMemo } from "react";
+import { useTheme, type Colors } from "../theme";
+import { Text } from "./themed";
 
 const HEIGHT = 180;
 const PAD = { top: 12, right: 12, bottom: 24, left: 40 };
 const MAX_POINTS = 30;
 
 export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const [width, setWidth] = useState(0);
 
@@ -60,14 +65,14 @@ export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
 								x2={width - PAD.right}
 								y1={y(v)}
 								y2={y(v)}
-								stroke="#e5e7eb"
+								stroke={c.border}
 								strokeWidth={1}
 							/>
 							<SvgText
 								x={PAD.left - 6}
 								y={y(v) + 4}
 								fontSize={11}
-								fill="#6b7280"
+								fill={c.textMuted}
 								textAnchor="end"
 							>
 								{v.toFixed(1)}
@@ -77,7 +82,7 @@ export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
 					<Polyline
 						points={polyline}
 						fill="none"
-						stroke="#2563eb"
+						stroke={c.primary}
 						strokeWidth={2}
 						strokeLinejoin="round"
 					/>
@@ -87,14 +92,14 @@ export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
 							cx={x(p.timestamp)}
 							cy={y(p.weightKg)}
 							r={3}
-							fill="#2563eb"
+							fill={c.primary}
 						/>
 					))}
 					<SvgText
 						x={x(first.timestamp)}
 						y={HEIGHT - 6}
 						fontSize={11}
-						fill="#6b7280"
+						fill={c.textMuted}
 						textAnchor="start"
 					>
 						{df.format(new Date(first.timestamp))}
@@ -103,7 +108,7 @@ export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
 						x={x(last.timestamp)}
 						y={HEIGHT - 6}
 						fontSize={11}
-						fill="#6b7280"
+						fill={c.textMuted}
 						textAnchor="end"
 					>
 						{df.format(new Date(last.timestamp))}
@@ -114,7 +119,7 @@ export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Colors) => StyleSheet.create({
 	wrap: { height: HEIGHT },
-	helperText: { color: "#6b7280", paddingVertical: 8 },
+	helperText: { color: c.textMuted, paddingVertical: 8 },
 });

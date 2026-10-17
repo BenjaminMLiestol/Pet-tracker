@@ -1,19 +1,17 @@
 import React from "react";
-import {
-	View,
-	Text,
-	StyleSheet,
-	Image,
-	ScrollView,
-	RefreshControl,
-} from "react-native";
+import { View, StyleSheet, Image, ScrollView, RefreshControl } from "react-native";
 import { daysBetween } from "../utils/dates";
 import { usePet } from "../context/PetContext";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
+import { useMemo } from "react";
+import { useTheme, type Colors } from "../theme";
+import { Text } from "../components/themed";
 
 export default function HomeScreen() {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const isFocused = useIsFocused();
 	const DOG_IMG = require("../../assets/dog.png");
@@ -115,11 +113,11 @@ function formatRelativeDays(
 	return t("days_ago", { count: days });
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Colors) => StyleSheet.create({
 	// ScrollView container
 	screen: {
 		flex: 1,
-		backgroundColor: "#fff",
+		backgroundColor: c.bg,
 	},
 	// Inner layout for ScrollView
 	content: {
@@ -134,8 +132,8 @@ const styles = StyleSheet.create({
 		marginBottom: 16,
 	},
 	card: {
-		backgroundColor: "#f9fafb",
-		borderColor: "#e5e7eb",
+		backgroundColor: c.surface,
+		borderColor: c.border,
 		borderWidth: 1,
 		borderRadius: 12,
 		padding: 16,
@@ -151,7 +149,7 @@ const styles = StyleSheet.create({
 		marginBottom: 4,
 	},
 	label: {
-		color: "#374151",
+		color: c.textSecondary,
 		fontWeight: "600",
 	},
 
@@ -160,7 +158,7 @@ const styles = StyleSheet.create({
 		marginTop: 12,
 		borderRadius: 16,
 		overflow: "hidden",
-		backgroundColor: "#f3f4f6",
+		backgroundColor: c.surfaceAlt,
 		shadowColor: "#000",
 		shadowOpacity: 0.08,
 		shadowRadius: 8,

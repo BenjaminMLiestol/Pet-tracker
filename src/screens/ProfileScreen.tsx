@@ -1,21 +1,18 @@
 import React from "react";
-import {
-	View,
-	Text,
-	StyleSheet,
-	ScrollView,
-	Switch,
-	Alert,
-	RefreshControl,
-} from "react-native";
+import { View, StyleSheet, ScrollView, Switch, Alert, RefreshControl } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { usePet } from "../context/PetContext";
 import { useReminders } from "../context/RemindersContext";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
+import { useMemo } from "react";
+import { useTheme, type Colors } from "../theme";
+import { Text } from "../components/themed";
 
 export default function ProfileScreen() {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const { user } = useAuth();
 	const {
@@ -108,14 +105,14 @@ export default function ProfileScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
-	screen: { flex: 1, backgroundColor: "#fff" },
+const makeStyles = (c: Colors) => StyleSheet.create({
+	screen: { flex: 1, backgroundColor: c.bg },
 	content: { padding: 16, alignItems: "stretch", justifyContent: "flex-start" },
 
 	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
 	card: {
-		backgroundColor: "#f9fafb",
-		borderColor: "#e5e7eb",
+		backgroundColor: c.surface,
+		borderColor: c.border,
 		borderWidth: 1,
 		borderRadius: 12,
 		padding: 16,
@@ -123,12 +120,12 @@ const styles = StyleSheet.create({
 	},
 	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
 	row: { fontSize: 16, marginBottom: 6 },
-	label: { color: "#374151", fontWeight: "600" },
+	label: { color: c.textSecondary, fontWeight: "600" },
 	switchRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 	},
 	switchLabel: { fontSize: 16, flex: 1, marginRight: 12 },
-	hint: { color: "#6b7280", marginTop: 8 },
+	hint: { color: c.textMuted, marginTop: 8 },
 });

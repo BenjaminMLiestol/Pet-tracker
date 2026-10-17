@@ -1,9 +1,12 @@
 import React from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import DateTimePicker, {
 	DateTimePickerAndroid,
 } from "@react-native-community/datetimepicker";
 import { useTranslation } from "react-i18next";
+import { useMemo } from "react";
+import { useTheme, type Colors } from "../theme";
+import { Text } from "./themed";
 
 type Props = {
 	label: string;
@@ -12,6 +15,8 @@ type Props = {
 };
 
 export default function DateField({ label, value, onChange }: Props) {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
 	const { i18n } = useTranslation();
 	const locale = i18n.language === "nb" ? "nb-NO" : "en-US";
 
@@ -41,6 +46,7 @@ export default function DateField({ label, value, onChange }: Props) {
 					mode="date"
 					display="compact"
 					locale={locale}
+					themeVariant={c.isDark ? "dark" : "light"}
 					onChange={handle}
 				/>
 			)}
@@ -48,16 +54,16 @@ export default function DateField({ label, value, onChange }: Props) {
 	);
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Colors) => StyleSheet.create({
 	row: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 		marginBottom: 12,
 	},
-	label: { fontSize: 16, color: "#374151", fontWeight: "600" },
+	label: { fontSize: 16, color: c.textSecondary, fontWeight: "600" },
 	androidValue: {
-		backgroundColor: "#f3f4f6",
+		backgroundColor: c.surfaceAlt,
 		borderRadius: 8,
 		paddingHorizontal: 12,
 		paddingVertical: 8,
