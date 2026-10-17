@@ -66,7 +66,7 @@ export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
 								y1={y(v)}
 								y2={y(v)}
 								stroke={c.border}
-								strokeWidth={1}
+								strokeWidth={StyleSheet.hairlineWidth}
 							/>
 							<SvgText
 								x={PAD.left - 6}
@@ -82,19 +82,20 @@ export default function WeightChart({ weights }: { weights: WeightRecord[] }) {
 					<Polyline
 						points={polyline}
 						fill="none"
-						stroke={c.primary}
-						strokeWidth={2}
+						stroke={c.accent}
+						strokeWidth={2.5}
 						strokeLinejoin="round"
+						strokeLinecap="round"
 					/>
-					{points.map((p) => (
-						<Circle
-							key={p.timestamp}
-							cx={x(p.timestamp)}
-							cy={y(p.weightKg)}
-							r={3}
-							fill={c.primary}
-						/>
-					))}
+					{/* Only the latest reading gets a marker; the line carries the rest. */}
+					<Circle
+						cx={x(last.timestamp)}
+						cy={y(last.weightKg)}
+						r={6}
+						fill={c.accent}
+						stroke={c.surface}
+						strokeWidth={3}
+					/>
 					<SvgText
 						x={x(first.timestamp)}
 						y={HEIGHT - 6}

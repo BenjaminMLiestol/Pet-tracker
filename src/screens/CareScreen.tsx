@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Button, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -8,9 +8,9 @@ import { useCare, type CareKind, type CareRecord } from "../context/CareContext"
 import CareFormModal from "../components/CareFormModal";
 import { usePet } from "../context/PetContext";
 import { daysBetween } from "../utils/dates";
-import { useMemo } from "react";
-import { useTheme, type Colors } from "../theme";
+import { space, useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
+import { Group, Screen, Section, Surface } from "../components/ui";
 import { useFreshIds, useMotion } from "../motion";
 import { useToast } from "../components/Toast";
 
@@ -20,8 +20,7 @@ export default function CareScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { records, busy, refreshing, refresh, addRecord, removeRecord } =
-		useCare();
+	const { records, busy, refreshing, refresh, addRecord, removeRecord } = useCare();
 	const { timezone } = usePet();
 	const toast = useToast();
 	const isFocused = useIsFocused();
@@ -39,27 +38,29 @@ export default function CareScreen() {
 		),
 	};
 
-	const df = new Intl.DateTimeFormat(
-		i18n.language === "nb" ? "nb-NO" : "en-US",
-	);
+	const df = new Intl.DateTimeFormat(i18n.language === "nb" ? "nb-NO" : "en-GB", {
+		day: "numeric",
+		month: "short",
+		year: "numeric",
+	});
 
 	const title = (r: CareRecord) => {
 		if (r.kind === "parasite") {
-			const type = r.parasiteType ? t(`parasite_${r.parasiteType}`) : "";
-			return [type, r.name].filter(Boolean).join(" · ");
+			const kindName = r.parasiteType ? t(`parasite_${r.parasiteType}`) : "";
+			return [kindName, r.name].filter(Boolean).join(" · ");
 		}
 		return r.name;
 	};
 
+	// Overdue is the only thing that's red; "due soon" is honey; the rest stays quiet.
 	const dueStatus = (r: CareRecord) => {
 		if (!r.nextDueAt) return null;
 		const diff = daysBetween(Date.now(), r.nextDueAt, timezone);
-		if (diff < 0)
-			return { text: t("care_overdue", { count: -diff }), color: c.danger };
-		if (diff === 0) return { text: t("care_due_today"), color: c.warning };
+		if (diff < 0) return { text: t("care_overdue", { count: -diff }), color: c.danger };
+		if (diff === 0) return { text: t("care_due_today"), color: c.accentText };
 		return {
 			text: `${t("care_next_due")}: ${df.format(new Date(r.nextDueAt))}`,
-			color: diff <= 14 ? c.warning : c.textMuted,
+			color: diff <= 14 ? c.accentText : c.textMuted,
 		};
 	};
 
@@ -71,66 +72,77 @@ export default function CareScreen() {
 
 	return (
 		<>
-			<ScrollView
-				style={styles.screen}
-				contentContainerStyle={styles.content}
-				refreshControl={
-					<RefreshControl refreshing={isFocused && refreshing} onRefresh={refresh} />
-				}
-				alwaysBounceVertical
-			>
-				<Text style={styles.title}>{t("care_title")}</Text>
-
+			<Screen title={t("care_title")} refreshing={isFocused && refreshing} onRefresh={refresh}>
 				{KINDS.map((kind) => (
-					<Animated.View key={kind} style={styles.card} layout={m.layout}>
-						<Text style={styles.cardTitle}>{t(`care_section_${kind}`)}</Text>
-						<Button
-							title={t(`care_add_${kind}`)}
-							onPress={() => setFormKind(kind)}
-							disabled={busy}
-						/>
-
-						{records[kind].length === 0 ? (
-							<Text style={styles.helperText}>{t("no_data_yet")}</Text>
-						) : (
-							records[kind].map((r) => {
-								const due = dueStatus(r);
-								return (
-									<Animated.View
-										key={r.id}
-										style={styles.record}
-										entering={fresh[kind].has(r.id) ? m.careEnter : undefined}
-										exiting={m.exit}
-										layout={m.layout}
-									>
-										<View style={styles.recordText}>
-											<Text style={styles.recordTitle}>
-												{title(r) || t("care_untitled")}
-											</Text>
-											<Text style={styles.recordMeta}>{df.format(new Date(r.date))}</Text>
-											{due && (
-												<Text style={[styles.recordMeta, { color: due.color }]}>
-													{due.text}
-												</Text>
-											)}
-											{r.notes ? <Text style={styles.recordNotes}>{r.notes}</Text> : null}
-										</View>
-										<Pressable
-											onPress={() => remove(kind, r.id)}
-											disabled={busy}
-											hitSlop={8}
-											accessibilityRole="button"
-											accessibilityLabel={t("delete")}
-										>
-											<Ionicons name="trash-outline" size={20} color={c.danger} />
-										</Pressable>
-									</Animated.View>
-								);
-							})
-						)}
+					<Animated.View key={kind} layout={m.layout}>
+						<Section
+							label={t(`care_section_${kind}`)}
+							right={
+								<Pressable
+									onPress={() => setFormKind(kind)}
+									disabled={busy}
+									hitSlop={8}
+									style={[styles.add, busy && styles.disabled]}
+									accessibilityRole="button"
+									accessibilityLabel={t(`care_add_${kind}`)}
+								>
+									<Ionicons name="add" size={20} color={c.text} />
+								</Pressable>
+							}
+						>
+							{records[kind].length === 0 ? (
+								<Surface style={styles.empty}>
+									<Text variant="sub" tone="muted">
+										{t("no_data_yet")}
+									</Text>
+								</Surface>
+							) : (
+								<Group>
+									{records[kind].map((r) => {
+										const due = dueStatus(r);
+										return (
+											<Animated.View
+												key={r.id}
+												style={styles.record}
+												entering={fresh[kind].has(r.id) ? m.careEnter : undefined}
+												exiting={m.exit}
+												layout={m.layout}
+											>
+												<View style={styles.recordText}>
+													<Text variant="headline">{title(r) || t("care_untitled")}</Text>
+													<Text variant="sub" tone="muted">
+														{df.format(new Date(r.date))}
+													</Text>
+													{due && (
+														<Text variant="sub" style={[styles.due, { color: due.color }]}>
+															{due.text}
+														</Text>
+													)}
+													{r.notes ? (
+														<Text variant="caption" tone="muted" style={styles.notes}>
+															{r.notes}
+														</Text>
+													) : null}
+												</View>
+												<Pressable
+													onPress={() => remove(kind, r.id)}
+													disabled={busy}
+													hitSlop={8}
+													style={styles.trash}
+													accessibilityRole="button"
+													accessibilityLabel={t("delete")}
+												>
+													<Ionicons name="trash-outline" size={20} color={c.textMuted} />
+												</Pressable>
+											</Animated.View>
+										);
+									})}
+								</Group>
+							)}
+						</Section>
 					</Animated.View>
 				))}
-			</ScrollView>
+			</Screen>
 
 			<CareFormModal
 				kind={formKind}
@@ -142,31 +154,30 @@ export default function CareScreen() {
 	);
 }
 
-const makeStyles = (c: Colors) => StyleSheet.create({
-	screen: { flex: 1, backgroundColor: c.bg },
-	content: { padding: 16, alignItems: "stretch", justifyContent: "flex-start" },
-	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
-	card: {
-		backgroundColor: c.surface,
-		borderColor: c.border,
-		borderWidth: 1,
-		borderRadius: 12,
-		padding: 16,
-		marginBottom: 12,
-	},
-	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-	helperText: { color: c.textMuted, paddingTop: 12 },
-	record: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-		justifyContent: "space-between",
-		paddingTop: 12,
-		marginTop: 12,
-		borderTopWidth: 1,
-		borderTopColor: c.border,
-	},
-	recordText: { flex: 1, marginRight: 12 },
-	recordTitle: { fontSize: 16, color: c.text, fontWeight: "600" },
-	recordMeta: { color: c.textMuted, marginTop: 2 },
-	recordNotes: { color: c.textSecondary, marginTop: 4 },
-});
+const makeStyles = (c: Colors) =>
+	StyleSheet.create({
+		add: {
+			width: 32,
+			height: 32,
+			borderRadius: 16,
+			backgroundColor: c.surface,
+			alignItems: "center",
+			justifyContent: "center",
+		},
+		disabled: { opacity: 0.4 },
+		empty: { padding: space[5], alignItems: "center" },
+		record: {
+			flexDirection: "row",
+			alignItems: "flex-start",
+			justifyContent: "space-between",
+			paddingVertical: space[3],
+			paddingLeft: space[4],
+			paddingRight: space[1],
+			gap: space[2],
+			backgroundColor: c.surface,
+		},
+		recordText: { flex: 1, gap: 2, paddingVertical: 2 },
+		due: { fontWeight: "600" },
+		notes: { marginTop: 2 },
+		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+	});

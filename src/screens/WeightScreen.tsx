@@ -1,27 +1,24 @@
 import React, { useMemo, useRef, useState } from "react";
-import { View, StyleSheet, Button, Keyboard, TouchableWithoutFeedback, ScrollView, RefreshControl } from "react-native";
-import { usePet } from "../context/PetContext";
+import { Keyboard, StyleSheet, View } from "react-native";
+import type { TextInput as RNTextInput } from "react-native";
+import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
+import { usePet } from "../context/PetContext";
 import WeightChart from "../components/WeightChart";
-import { useTheme, type Colors } from "../theme";
-import type { TextInput as RNTextInput } from "react-native";
+import AppButton from "../components/AppButton";
 import { Text, TextInput } from "../components/themed";
-import Animated from "react-native-reanimated";
+import { Group, Screen, Section, Surface } from "../components/ui";
 import { useFreshIds, useMotion } from "../motion";
+import { radius, smooth, space, type, useTheme, type Colors } from "../theme";
+import { formatDay } from "../utils/dates";
 
 export default function WeightScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const {
-		currentWeightKg,
-		weights,
-		setWeightToday,
-		busy,
-		refresh,
-		refreshing,
-	} = usePet();
+	const { currentWeightKg, weights, setWeightToday, busy, refresh, refreshing, timezone } =
+		usePet();
 	const [input, setInput] = useState("");
 	const inputRef = useRef<RNTextInput>(null);
 	const isFocused = useIsFocused();
@@ -31,10 +28,10 @@ export default function WeightScreen() {
 		[weights],
 	);
 
-	// The tiles shown. A weigh-in added just now (and only that) plays an entrance.
-	const tiles = useMemo(() => sorted.slice(0, 12), [sorted]);
-	const tileIds = useMemo(() => tiles.map((w) => w.timestamp), [tiles]);
-	const fresh = useFreshIds(tileIds);
+	// The rows shown. A weigh-in added just now (and only that) plays an entrance.
+	const rows = useMemo(() => sorted.slice(0, 12), [sorted]);
+	const rowIds = useMemo(() => rows.map((w) => w.timestamp), [rows]);
+	const fresh = useFreshIds(rowIds);
 	const m = useMotion();
 
 	const onSave = () => {
@@ -47,146 +44,109 @@ export default function WeightScreen() {
 		Keyboard.dismiss();
 	};
 
-	const df = new Intl.DateTimeFormat(
-		i18n.language === "nb" ? "nb-NO" : "en-US",
-	);
+	const locale = i18n.language === "nb" ? "nb-NO" : "en-GB";
+	const labels = { today: t("today"), yesterday: t("yesterday") };
+	const canSave = Number.isFinite(Number(input.replace(",", "."))) && Number(input.replace(",", ".")) > 0;
 
 	return (
-		<TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-			<ScrollView
-				style={styles.screen} // <-- only container bg/flex here
-				contentContainerStyle={styles.content} // <-- layout/padding belong here
-				refreshControl={
-					<RefreshControl
-						refreshing={isFocused && refreshing}
-						onRefresh={refresh}
-					/>
-				}
-				keyboardShouldPersistTaps="handled"
-				alwaysBounceVertical
-			>
-				<Text style={styles.title}>{t("weight_title")}</Text>
-
-				<View style={styles.card}>
-					<Text style={styles.cardTitle}>{t("current")}</Text>
-					<Text style={styles.row}>
-						<Text style={styles.label}>{t("current_weight")}: </Text>
-						{currentWeightKg != null
-							? `${currentWeightKg.toFixed(1)} kg`
-							: t("not_recorded")}
+		<Screen title={t("weight_title")} refreshing={isFocused && refreshing} onRefresh={refresh}>
+			<Surface style={styles.current}>
+				{currentWeightKg != null ? (
+					<View style={styles.valueRow}>
+						<Text variant="stat">{currentWeightKg.toFixed(1)}</Text>
+						<Text variant="title" tone="muted" style={styles.unit}>
+							kg
+						</Text>
+					</View>
+				) : (
+					<Text variant="title" tone="muted" style={styles.none}>
+						{t("not_recorded")}
 					</Text>
-				</View>
+				)}
+				<Text variant="sub" tone="muted">
+					{t("current_weight")}
+				</Text>
+			</Surface>
 
-				<View style={styles.card}>
-					<Text style={styles.cardTitle}>{t("weight_trend")}</Text>
+			<Section label={t("weight_trend")}>
+				<Surface style={styles.chart}>
 					<WeightChart weights={weights} />
-				</View>
+				</Surface>
+			</Section>
 
-				<View style={styles.card}>
-					<Text style={styles.cardTitle}>{t("log_today_optional")}</Text>
-					<View style={styles.formRow}>
-						<TextInput
-							placeholder={t("placeholder_weight")}
-							accessibilityLabel={t("weight_input_label")}
-							value={input}
-							onChangeText={setInput}
-							keyboardType="numeric"
-							style={styles.input}
-							ref={inputRef}
-							blurOnSubmit
-							returnKeyType="done"
-							onSubmitEditing={onSave}
-						/>
-						<Button title={t("save")} onPress={onSave} disabled={busy} />
-					</View>
+			<Section label={t("log_today_optional")}>
+				<View style={styles.form}>
+					<TextInput
+						ref={inputRef}
+						style={styles.input}
+						placeholder={t("placeholder_weight")}
+						accessibilityLabel={t("weight_input_label")}
+						value={input}
+						onChangeText={setInput}
+						keyboardType="decimal-pad"
+						returnKeyType="done"
+						blurOnSubmit
+						onSubmitEditing={onSave}
+					/>
+					<AppButton compact title={t("save")} onPress={onSave} disabled={busy || !canSave} />
 				</View>
+			</Section>
 
-				<View style={styles.card}>
-					<Text style={styles.cardTitle}>{t("history")}</Text>
-					<View style={styles.grid}>
-						{sorted.length === 0 ? (
-							<Text style={styles.helperText}>{t("no_data_yet")}</Text>
-						) : (
-							// Keyed by timestamp, not index: an index in the key re-mounts every
-							// tile on each insert, which would replay every entrance.
-							tiles.map((w) => (
-								<Animated.View
-									key={w.timestamp}
-									style={styles.tile}
-									entering={fresh.has(w.timestamp) ? m.tileEnter : undefined}
-								>
-									<Text style={styles.tileValue}>
-										{w.weightKg.toFixed(1)} kg
-									</Text>
-									<Text style={styles.tileDate}>
-										{df.format(new Date(w.timestamp))}
-									</Text>
-								</Animated.View>
-							))
-						)}
-					</View>
-				</View>
-			</ScrollView>
-		</TouchableWithoutFeedback>
+			<Section label={t("history")}>
+				{rows.length === 0 ? (
+					<Surface style={styles.empty}>
+						<Text variant="sub" tone="muted">
+							{t("no_data_yet")}
+						</Text>
+					</Surface>
+				) : (
+					<Group>
+						{rows.map((w) => (
+							<Animated.View
+								key={w.timestamp}
+								style={styles.historyRow}
+								entering={fresh.has(w.timestamp) ? m.rowEnter : undefined}
+							>
+								<Text variant="body" style={type.numeric}>
+									{w.weightKg.toFixed(1)} kg
+								</Text>
+								<Text variant="sub" tone="muted">
+									{formatDay(w.timestamp, timezone, locale, labels)}
+								</Text>
+							</Animated.View>
+						))}
+					</Group>
+				)}
+			</Section>
+		</Screen>
 	);
 }
 
-const makeStyles = (c: Colors) => StyleSheet.create({
-	// Use this for the ScrollView itself (container)
-	screen: {
-		flex: 1,
-		backgroundColor: c.bg,
-	},
-	// Use this for layout & padding inside the ScrollView
-	content: {
-		padding: 16,
-		alignItems: "stretch",
-		justifyContent: "flex-start",
-	},
-
-	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
-	card: {
-		backgroundColor: c.surface,
-		borderColor: c.border,
-		borderWidth: 1,
-		borderRadius: 12,
-		padding: 16,
-		marginBottom: 12,
-	},
-	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-	row: { fontSize: 16, marginBottom: 8 },
-	label: { color: c.textSecondary, fontWeight: "600" },
-	formRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-	input: {
-		flex: 1,
-		borderWidth: 1,
-		borderColor: c.borderStrong,
-		borderRadius: 8,
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		marginRight: 8,
-		backgroundColor: "white",
-	},
-	grid: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		justifyContent: "space-between",
-	},
-	tile: {
-		width: "48%",
-		backgroundColor: c.infoBg,
-		borderColor: c.infoBorder,
-		borderWidth: 1,
-		borderRadius: 10,
-		padding: 12,
-		marginBottom: 8,
-	},
-	tileValue: {
-		fontSize: 18,
-		fontWeight: "700",
-		color: c.infoText,
-		marginBottom: 4,
-	},
-	tileDate: { fontSize: 12, color: c.textSecondary },
-	helperText: { color: c.textMuted },
-});
+const makeStyles = (c: Colors) =>
+	StyleSheet.create({
+		current: { padding: space[5], gap: space[1], marginBottom: space[6] },
+		valueRow: { flexDirection: "row", alignItems: "baseline", gap: space[2] },
+		unit: { fontVariant: ["tabular-nums"] },
+		none: { marginVertical: space[2] },
+		chart: { paddingVertical: space[4], paddingHorizontal: space[4] },
+		form: { flexDirection: "row", gap: space[3], alignItems: "center" },
+		input: {
+			flex: 1,
+			height: 52,
+			backgroundColor: c.surface,
+			borderRadius: radius.md,
+			...smooth,
+			paddingHorizontal: space[4],
+			fontSize: 17,
+			fontVariant: ["tabular-nums"],
+		},
+		historyRow: {
+			flexDirection: "row",
+			alignItems: "center",
+			justifyContent: "space-between",
+			minHeight: 52,
+			paddingHorizontal: space[4],
+			backgroundColor: c.surface,
+		},
+		empty: { padding: space[5], alignItems: "center" },
+	});

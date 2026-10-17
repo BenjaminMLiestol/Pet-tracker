@@ -78,10 +78,8 @@ function ToastHost({
 					key={toast.id}
 					entering={m.toastEnter}
 					exiting={m.toastExit}
-					style={[
-						styles.toast,
-						{ backgroundColor: c.surface, borderColor: c.border },
-					]}
+					// Inverse of the page (ink on light, light on dark) so it never blends in.
+					style={[styles.toast, { backgroundColor: c.text }]}
 				>
 					<Pressable
 						onPress={onPress}
@@ -92,9 +90,11 @@ function ToastHost({
 						<Ionicons
 							name={toast.kind === "success" ? "checkmark-circle" : "alert-circle"}
 							size={20}
-							color={toast.kind === "success" ? c.success : c.danger}
+							color={toast.kind === "success" ? c.successOnInverse : c.dangerOnInverse}
 						/>
-						<Text style={styles.message}>{toast.message}</Text>
+						<Text variant="sub" style={[styles.message, { color: c.bg }]}>
+							{toast.message}
+						</Text>
 					</Pressable>
 				</Animated.View>
 			)}
@@ -111,21 +111,21 @@ export function useToast(): ToastApi {
 const styles = StyleSheet.create({
 	host: { position: "absolute", left: 16, right: 16, alignItems: "center" },
 	toast: {
-		borderWidth: 1,
-		borderRadius: 14,
+		borderRadius: 999,
+		borderCurve: "continuous",
 		maxWidth: 480,
 		shadowColor: "#000",
-		shadowOpacity: 0.12,
-		shadowRadius: 12,
-		shadowOffset: { width: 0, height: 4 },
-		elevation: 4,
+		shadowOpacity: 0.18,
+		shadowRadius: 16,
+		shadowOffset: { width: 0, height: 6 },
+		elevation: 6,
 	},
 	row: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 10,
 		paddingVertical: 12,
-		paddingHorizontal: 14,
+		paddingHorizontal: 18,
 	},
-	message: { fontSize: 15, flexShrink: 1 },
+	message: { fontWeight: "500", flexShrink: 1 },
 });

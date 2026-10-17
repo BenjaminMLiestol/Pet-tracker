@@ -1,22 +1,27 @@
-import React from "react";
-import { View, StyleSheet, Image, ScrollView, RefreshControl } from "react-native";
+import React, { useMemo } from "react";
+import { Image, StyleSheet, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
+import { useIsFocused } from "@react-navigation/native";
 import { daysBetween } from "../utils/dates";
 import { usePet } from "../context/PetContext";
 import { useAuth } from "../context/AuthContext";
-import { useTranslation } from "react-i18next";
-import { useIsFocused } from "@react-navigation/native";
-import { useMemo } from "react";
-import { useTheme, type Colors } from "../theme";
+import { radius, smooth, space, useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
+import { Group, PressScale, Row, Screen, Section, Surface } from "../components/ui";
+
+const DOG_IMG = require("../../assets/dog.png");
 
 export default function HomeScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
 	const isFocused = useIsFocused();
-	const DOG_IMG = require("../../assets/dog.png");
-
+	const navigation = useNavigation<any>();
+	const { user } = useAuth();
 	const {
+		name,
+		breed,
 		feedingsToday,
 		walksToday,
 		lastBathAt,
@@ -25,150 +30,139 @@ export default function HomeScreen() {
 		refresh,
 		refreshing,
 	} = usePet();
-	const { user } = useAuth();
 
-	// Use user's name (fallback to email or a friendly label)
-	const displayName =
-		user?.first_name || user?.last_name
-			? `${user?.first_name ?? ""}`.trim()
-			: (user?.email ?? t("friend"));
+	const displayName = user?.first_name?.trim() || user?.email || t("friend");
 
-	const df = new Intl.DateTimeFormat(
-		i18n.language === "nb" ? "nb-NO" : "en-US",
-	);
-	const lastBathText = lastBathAt
-		? `${df.format(lastBathAt)} (${formatRelativeDays(lastBathAt, timezone, t)})`
-		: t("not_recorded");
+	const df = new Intl.DateTimeFormat(i18n.language === "nb" ? "nb-NO" : "en-US", {
+		day: "numeric",
+		month: "short",
+		year: "numeric",
+	});
 
-	const weightText =
-		currentWeightKg != null
-			? `${currentWeightKg.toFixed(1)} kg`
-			: t("not_recorded");
-
-	const { width: imgW, height: imgH } = Image.resolveAssetSource(DOG_IMG);
-	const aspectRatio = imgW && imgH ? imgW / imgH : 16 / 9;
+	const bathAgo = lastBathAt ? daysBetween(lastBathAt.getTime(), Date.now(), timezone) : null;
+	const bathAgoText =
+		bathAgo == null ? null : bathAgo <= 0 ? t("today") : t("days_ago", { count: bathAgo });
 
 	return (
-		<ScrollView
-			style={styles.screen}
-			contentContainerStyle={styles.content}
-			refreshControl={
-				<RefreshControl
-					refreshing={isFocused && refreshing}
-					onRefresh={refresh}
-				/>
-			}
-			alwaysBounceVertical
+		<Screen
+			title={t("greeting", { name: displayName })}
+			refreshing={isFocused && refreshing}
+			onRefresh={refresh}
 		>
-			<Text style={styles.title}>{t("greeting", { name: displayName })}</Text>
-
-			<View style={styles.card}>
-				<Text style={styles.cardTitle}>{t("today")}</Text>
-				<Text style={styles.row}>
-					<Text style={styles.label}>{t("fed")}: </Text>
-					{feedingsToday > 0 ? t("times", { count: feedingsToday }) : t("no")}
-				</Text>
-				<Text style={styles.row}>
-					<Text style={styles.label}>{t("walked")}: </Text>
-					{walksToday > 0 ? t("times", { count: walksToday }) : t("no")}
-				</Text>
-			</View>
-
-			<View style={styles.card}>
-				<Text style={styles.cardTitle}>{t("grooming")}</Text>
-				<Text style={styles.row}>
-					<Text style={styles.label}>{t("last_bath")}: </Text>
-					{lastBathText}
-				</Text>
-			</View>
-
-			<View style={styles.card}>
-				<Text style={styles.cardTitle}>{t("health")}</Text>
-				<Text style={styles.row}>
-					<Text style={styles.label}>{t("current_weight")}: </Text>
-					{weightText}
-				</Text>
-			</View>
-
-			<View style={styles.heroImageWrap}>
+			{/* Toya gets the one warm moment on the page. */}
+			<View style={styles.hero}>
+				<View style={styles.heroText}>
+					<Text variant="title" style={styles.heroName} numberOfLines={1}>
+						{name}
+					</Text>
+					{breed ? (
+						<Text variant="sub" style={styles.heroBreed} numberOfLines={1}>
+							{breed}
+						</Text>
+					) : null}
+				</View>
 				<Image
 					source={DOG_IMG}
-					style={[styles.heroImage, { aspectRatio }]}
-					resizeMode="cover"
+					style={styles.heroImage}
+					resizeMode="contain"
 					accessible
 					accessibilityLabel={t("dog_image_alt", { defaultValue: "Dog" })}
 				/>
 			</View>
-		</ScrollView>
+
+			<Section label={t("today")}>
+				<View style={styles.tiles}>
+					<StatTile
+						value={feedingsToday}
+						label={t("fed")}
+						onPress={() => navigation.navigate("Feeding")}
+					/>
+					<StatTile
+						value={walksToday}
+						label={t("walked")}
+						onPress={() => navigation.navigate("Walk")}
+					/>
+				</View>
+			</Section>
+
+			<Section label={t("overview")}>
+				<Group>
+					<Row
+						title={t("last_bath")}
+						detail={lastBathAt ? df.format(lastBathAt) : undefined}
+						right={
+							<Text variant="body" tone={bathAgoText ? "default" : "muted"} style={styles.value}>
+								{bathAgoText ?? t("not_recorded")}
+							</Text>
+						}
+					/>
+					<Row
+						title={t("current_weight")}
+						right={
+							<Text
+								variant="body"
+								tone={currentWeightKg != null ? "default" : "muted"}
+								style={styles.value}
+							>
+								{currentWeightKg != null ? `${currentWeightKg.toFixed(1)} kg` : t("not_recorded")}
+							</Text>
+						}
+					/>
+				</Group>
+			</Section>
+		</Screen>
 	);
 }
 
-function formatRelativeDays(
-	date: Date,
-	timezone: string,
-	t: (k: string, o?: any) => string,
-): string {
-	const days = daysBetween(date.getTime(), Date.now(), timezone);
-	if (days <= 0) return t("today");
-	return t("days_ago", { count: days });
+// A count is the whole point of this tile, so it is the biggest thing on the page.
+function StatTile({ value, label, onPress }: { value: number; label: string; onPress: () => void }) {
+	const c = useTheme();
+	const styles = useMemo(() => makeStyles(c), [c]);
+	return (
+		<PressScale
+			onPress={onPress}
+			style={styles.tileWrap}
+			accessibilityLabel={`${label}: ${value}`}
+		>
+			<Surface style={styles.tile}>
+				<Text variant="stat" style={value === 0 ? styles.statZero : undefined}>
+					{value}
+				</Text>
+				<Text variant="sub" tone="muted">
+					{label}
+				</Text>
+			</Surface>
+		</PressScale>
+	);
 }
 
-const makeStyles = (c: Colors) => StyleSheet.create({
-	// ScrollView container
-	screen: {
-		flex: 1,
-		backgroundColor: c.bg,
-	},
-	// Inner layout for ScrollView
-	content: {
-		padding: 16,
-		alignItems: "stretch",
-		justifyContent: "flex-start",
-	},
-
-	title: {
-		fontSize: 24,
-		fontWeight: "600",
-		marginBottom: 16,
-	},
-	card: {
-		backgroundColor: c.surface,
-		borderColor: c.border,
-		borderWidth: 1,
-		borderRadius: 12,
-		padding: 16,
-		marginBottom: 12,
-	},
-	cardTitle: {
-		fontSize: 16,
-		fontWeight: "700",
-		marginBottom: 8,
-	},
-	row: {
-		fontSize: 16,
-		marginBottom: 4,
-	},
-	label: {
-		color: c.textSecondary,
-		fontWeight: "600",
-	},
-
-	/* --- Image styles --- */
-	heroImageWrap: {
-		marginTop: 12,
-		borderRadius: 16,
-		overflow: "hidden",
-		backgroundColor: c.surfaceAlt,
-		shadowColor: "#000",
-		shadowOpacity: 0.08,
-		shadowRadius: 8,
-		shadowOffset: { width: 0, height: 4 },
-		elevation: 3,
-	},
-	heroImage: {
-		width: "100%",
-		height: undefined, // height derived from aspectRatio
-		minHeight: 160,
-		maxHeight: 300,
-	},
-});
+const makeStyles = (c: Colors & { isDark: boolean }) =>
+	StyleSheet.create({
+		hero: {
+			flexDirection: "row",
+			alignItems: "flex-end",
+			justifyContent: "space-between",
+			backgroundColor: c.accentSoft,
+			borderRadius: radius.lg,
+			...smooth,
+			paddingLeft: space[5],
+			paddingTop: space[5],
+			marginBottom: space[6],
+			overflow: "hidden",
+			minHeight: 168,
+		},
+		heroText: { flexShrink: 1, paddingBottom: space[5], alignSelf: "flex-start" },
+		heroName: { color: c.isDark ? c.text : c.accentText },
+		heroBreed: { color: c.textSecondary, marginTop: 2 },
+		heroImage: { width: 176, height: 176 },
+		tiles: { flexDirection: "row", gap: space[3] },
+		tileWrap: { flex: 1 },
+		tile: {
+			paddingHorizontal: space[5],
+			paddingTop: space[4],
+			paddingBottom: space[5],
+			gap: space[1],
+		},
+		statZero: { color: c.textMuted },
+		value: { textAlign: "right", flexShrink: 1, fontVariant: ["tabular-nums"] },
+	});

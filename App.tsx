@@ -1,7 +1,7 @@
 // App.tsx (updated)
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, LogBox } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -54,12 +54,15 @@ function ThemedNavigation({ children }: { children: React.ReactNode }) {
   );
 }
 
+// React Navigation's own tab bar still calls navigate() with the old object form, and the
+// dev-only warning bar it triggers sits over the tab bar. Not ours to fix; hide just this one.
+LogBox.ignoreLogs(["Passing an object as the argument to 'navigate' is deprecated"]);
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function AppTabs() {
   const [ready, setReady] = useState(false);
-  const { logout } = useAuth();
   const { t } = useTranslation();
   const c = useTheme();
 
@@ -77,21 +80,19 @@ function AppTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerTitle: () => <HeaderTitle />,
-        headerTitleAlign: 'center',
-        headerRight: () => (
-          <Pressable
-            onPress={logout}
-            style={{ paddingRight: 16 }}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('logout')}
-          >
-            <Ionicons name="log-out-outline" size={20} color={c.text} />
-          </Pressable>
-        ),
-        tabBarActiveTintColor: c.primary,
+        // No header bar: each page opens with its own large title, and the tab bar names the page.
+        headerShown: false,
+        sceneStyle: { backgroundColor: c.bg },
+        tabBarHideOnKeyboard: true,
+        tabBarActiveTintColor: c.text,
         tabBarInactiveTintColor: c.textMuted,
+        tabBarStyle: {
+          backgroundColor: c.bg,
+          borderTopColor: c.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          elevation: 0,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1 },
         tabBarLabel:
           route.name === 'Home'    ? t('tabs_home')   :
           route.name === 'Feeding' ? t('tabs_feeding'):
@@ -103,13 +104,13 @@ function AppTabs() {
         tabBarIcon: ({ color, size, focused }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home-outline';
           if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
-          if (route.name === 'Feeding') iconName = focused ? 'fast-food' : 'fast-food-outline';
+          if (route.name === 'Feeding') iconName = focused ? 'restaurant' : 'restaurant-outline';
           if (route.name === 'Walk') iconName = focused ? 'walk' : 'walk-outline';
-          if (route.name === 'Weight') iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+          if (route.name === 'Weight') iconName = focused ? 'scale' : 'scale-outline';
           if (route.name === 'Bath') iconName = focused ? 'water' : 'water-outline';
-          if (route.name === 'Care') iconName = focused ? 'medkit' : 'medkit-outline';
+          if (route.name === 'Care') iconName = focused ? 'heart' : 'heart-outline';
           if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
+          return <Ionicons name={iconName} size={24} color={color} />;
         },
       })}
     >
@@ -168,21 +169,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-function HeaderTitle() {
-	const c = useTheme();
-	const styles = useMemo(() => makeStyles(c), [c]);
-  const { name } = usePet();
-  return (
-    <View style={styles.headerTitleContainer}>
-      <Ionicons name="paw" size={22} color={c.text} style={styles.headerIcon} />
-      <Text style={styles.headerTitleText}>{name}</Text>
-    </View>
-  );
-}
-
-const makeStyles = (c: Colors) => StyleSheet.create({
-  headerTitleContainer: { flexDirection: 'row', alignItems: 'center' },
-  headerIcon: { marginRight: 8 },
-  headerTitleText: { fontSize: 18, fontWeight: '700' },
-});

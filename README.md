@@ -35,6 +35,16 @@ src/components/         shared UI (activity log, weight chart, forms)
 src/i18n/               nb / en strings
 ```
 
+## Design system
+
+Quiet and precise: surfaces separate by tone (never borders), primary actions are ink, and one warm honey accent (from Toya's coat) marks data and state, never decoration.
+
+- `src/theme.ts`: light and dark palettes, the type scale (`type`), radii (`radius`, `smooth`) and 4pt spacing (`space`). Use these, not literals.
+- `src/components/ui.tsx`: `Screen` (large title, safe area, pull-to-refresh), `Surface`, `Group` (rows with hairlines), `Section`, `Row`, `PressScale`.
+- `src/components/AppButton.tsx`: the one button (`primary` ink, `secondary` tonal, `ghost`), all with the same press feel.
+- `src/components/themed.tsx`: `Text` takes `variant` (a step of the type scale) and `tone`.
+- There is no header bar: each page opens with its own large title, and logout lives in Profile.
+
 ## Behaviour worth knowing
 
 - **Auth:** bearer token in SecureStore; any 401 (except on login/register) logs the user out. Signing out wipes the cached pet and care data.

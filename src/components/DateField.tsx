@@ -26,7 +26,7 @@ export default function DateField({ label, value, onChange }: Props) {
 
 	return (
 		<View style={styles.row}>
-			<Text style={styles.label}>{label}</Text>
+			<Text variant="body" style={styles.label}>{label}</Text>
 			{Platform.OS === "android" ? (
 				<Pressable
 					style={styles.androidValue}
@@ -62,12 +62,13 @@ const makeStyles = (c: Colors) => StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		marginBottom: 12,
+		minHeight: 52,
+		paddingHorizontal: 16,
 	},
-	label: { fontSize: 16, color: c.textSecondary, fontWeight: "600" },
+	label: { fontSize: 17 },
 	androidValue: {
 		backgroundColor: c.surfaceAlt,
-		borderRadius: 8,
+		borderRadius: 10,
 		paddingHorizontal: 12,
 		paddingVertical: 8,
 	},

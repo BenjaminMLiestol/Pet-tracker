@@ -1,16 +1,19 @@
 import React, { useMemo } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePet } from "../context/PetContext";
-import { useTheme, type Colors } from "../theme";
+import { radius, smooth, space, type, useTheme, type Colors } from "../theme";
+import { formatWhen } from "../utils/dates";
+import { useFreshIds, useMotion } from "../motion";
 import { Text } from "./themed";
 import AppButton from "./AppButton";
 import TickText from "./TickText";
 import { useToast } from "./Toast";
-import { useFreshIds, useMotion } from "../motion";
+import { Section, Surface } from "./ui";
 
 type Entry = { id: number; timestamp: number };
 
@@ -42,9 +45,10 @@ export default function ActivityLogScreen({
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { name, busy, refresh, refreshing } = usePet();
+	const { name, busy, refresh, refreshing, timezone } = usePet();
 	const isFocused = useIsFocused();
 	const toast = useToast();
+	const insets = useSafeAreaInsets();
 
 	const sorted = useMemo(
 		() => [...entries].sort((a, b) => b.timestamp - a.timestamp),
@@ -56,13 +60,8 @@ export default function ActivityLogScreen({
 	const fresh = useFreshIds(ids);
 	const m = useMotion();
 
-	const countLabel =
-		countToday > 0 ? t("times", { count: countToday }) : t("not_yet_today");
-
-	const dtf = new Intl.DateTimeFormat(
-		i18n.language === "nb" ? "nb-NO" : "en-US",
-		{ dateStyle: "short", timeStyle: "short" },
-	);
+	const locale = i18n.language === "nb" ? "nb-NO" : "en-GB";
+	const labels = { today: t("today"), yesterday: t("yesterday") };
 
 	// Deletes happen straight away; the toast reports how it went.
 	const remove = async (id: number) => {
@@ -70,103 +69,122 @@ export default function ActivityLogScreen({
 		toast.show(ok ? t("entry_deleted") : t("delete_failed"), ok ? "success" : "error");
 	};
 
+	const last = sorted.length - 1;
+
 	return (
 		<Animated.FlatList
 			style={styles.screen}
+			contentContainerStyle={[styles.content, { paddingTop: insets.top + space[4] }]}
 			itemLayoutAnimation={m.layout}
-			contentContainerStyle={styles.content}
 			data={sorted}
 			refreshing={isFocused && refreshing}
 			onRefresh={refresh}
 			onEndReached={onLoadMore}
 			onEndReachedThreshold={0.5}
 			ListFooterComponent={
-				loadingMore ? <ActivityIndicator style={styles.footer} /> : null
+				loadingMore ? <ActivityIndicator color={c.textMuted} style={styles.footer} /> : null
 			}
 			keyExtractor={(item) => String(item.id)}
 			ListHeaderComponent={
 				<>
-					<Text style={styles.title}>{title}</Text>
+					<Text variant="largeTitle" style={styles.title}>
+						{title}
+					</Text>
 
-					<View style={styles.card}>
-						<Text style={styles.row}>
-							<Text style={styles.label}>{todayLabel}</Text>
+					{/* The count is the point of this page, so it is the biggest thing on it. */}
+					<Surface style={styles.summary}>
+						<TickText
+							value={String(countToday)}
+							style={[type.stat, countToday === 0 && { color: c.textMuted }]}
+						/>
+						<Text variant="sub" tone="muted" style={styles.summaryLabel}>
+							{name ? `${name} · ${todayLabel}` : todayLabel}
 						</Text>
-						<View style={styles.summaryRow}>
-							<View style={styles.countRow}>
-								<Text style={styles.nameText}>{name}: </Text>
-								<TickText style={styles.nameText} value={countLabel} />
-							</View>
-						</View>
-						<AppButton title={logButtonLabel} onPress={onAdd} disabled={busy} />
-					</View>
+						<AppButton title={logButtonLabel} onPress={onAdd} disabled={busy} icon="add" />
+					</Surface>
 
-					<View style={styles.card}>
-						<Text style={styles.cardTitle}>{t("history")}</Text>
-					</View>
+					<Section label={t("history")} style={styles.sectionLabel}>
+						{null}
+					</Section>
 				</>
 			}
-			renderItem={({ item }) => (
+			renderItem={({ item, index }) => (
 				<Animated.View
-					style={styles.listRow}
+					style={[
+						styles.row,
+						index === 0 && styles.rowFirst,
+						index === last && styles.rowLast,
+					]}
 					entering={fresh.has(item.id) ? m.rowEnter : undefined}
 					exiting={m.exit}
 				>
-					<Text style={styles.listRowTitle}>
-						{dtf.format(new Date(item.timestamp))}
+					<Text variant="body" style={type.numeric}>
+						{formatWhen(item.timestamp, timezone, locale, labels)}
 					</Text>
 					<Pressable
 						onPress={() => remove(item.id)}
 						disabled={busy}
-						hitSlop={8}
+						hitSlop={12}
+						style={styles.trash}
 						accessibilityRole="button"
 						accessibilityLabel={t("delete")}
 					>
-						<Ionicons name="trash-outline" size={20} color={c.danger} />
+						<Ionicons name="trash-outline" size={20} color={c.textMuted} />
 					</Pressable>
 				</Animated.View>
 			)}
-			ItemSeparatorComponent={() => <View style={styles.separator} />}
+			ItemSeparatorComponent={() => (
+				<View style={styles.separatorWrap}>
+					<View style={styles.separator} />
+				</View>
+			)}
 			ListEmptyComponent={
-				<Text style={styles.helperText}>{t("no_data_yet")}</Text>
+				<Surface style={styles.empty}>
+					<Text variant="sub" tone="muted">
+						{t("no_data_yet")}
+					</Text>
+				</Surface>
 			}
 		/>
 	);
 }
 
-const makeStyles = (c: Colors) => StyleSheet.create({
-	screen: { flex: 1, backgroundColor: c.bg },
-	content: { padding: 16, alignItems: "stretch", justifyContent: "flex-start" },
+const makeStyles = (c: Colors) =>
+	StyleSheet.create({
+		screen: { flex: 1, backgroundColor: c.bg },
+		content: { paddingHorizontal: space[5], paddingBottom: space[8] },
+		title: { marginBottom: space[5] },
 
-	title: { fontSize: 24, fontWeight: "600", marginBottom: 16 },
+		summary: { padding: space[5], gap: space[1], marginBottom: space[6] },
+		summaryLabel: { marginBottom: space[4] },
+		sectionLabel: { marginBottom: 0 },
 
-	card: {
-		backgroundColor: c.surface,
-		borderColor: c.border,
-		borderWidth: 1,
-		borderRadius: 12,
-		padding: 16,
-		marginBottom: 12,
-	},
-	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-	row: { fontSize: 16, marginBottom: 8 },
-	label: { color: c.textSecondary, fontWeight: "600" },
-
-	summaryRow: { marginBottom: 8 },
-	countRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline" },
-	nameText: { fontSize: 16, color: c.text },
-
-	listRow: {
-		backgroundColor: c.bg,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		paddingVertical: 12,
-		paddingHorizontal: 4,
-	},
-	listRowTitle: { color: c.text },
-	separator: { height: 1, backgroundColor: c.border },
-
-	footer: { paddingVertical: 16 },
-	helperText: { color: c.textMuted, paddingVertical: 8 },
-});
+		row: {
+			flexDirection: "row",
+			alignItems: "center",
+			justifyContent: "space-between",
+			minHeight: 56,
+			paddingLeft: space[4],
+			paddingRight: space[1],
+			backgroundColor: c.surface,
+		},
+		rowFirst: {
+			borderTopLeftRadius: radius.lg,
+			borderTopRightRadius: radius.lg,
+			...smooth,
+		},
+		rowLast: {
+			borderBottomLeftRadius: radius.lg,
+			borderBottomRightRadius: radius.lg,
+			...smooth,
+		},
+		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+		separatorWrap: { backgroundColor: c.surface },
+		separator: {
+			height: StyleSheet.hairlineWidth,
+			backgroundColor: c.border,
+			marginLeft: space[4],
+		},
+		empty: { padding: space[5], alignItems: "center" },
+		footer: { paddingVertical: space[4] },
+	});

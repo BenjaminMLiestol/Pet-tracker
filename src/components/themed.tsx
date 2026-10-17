@@ -5,13 +5,25 @@ import {
 	type TextInputProps,
 	type TextProps,
 } from "react-native";
-import { useTheme } from "../theme";
+import { type, useTheme } from "../theme";
+
+type Tone = "default" | "secondary" | "muted" | "accent";
+type TextExtra = { variant?: keyof typeof type; tone?: Tone };
 
 // Drop-in replacements: React Native's own Text/TextInput default to black,
 // which disappears on a dark background. Explicit `color` styles still win.
-export function Text({ style, ...props }: TextProps) {
+// `variant` applies a step of the type scale; `tone` picks the text colour.
+export function Text({ style, variant, tone = "default", ...props }: TextProps & TextExtra) {
 	const c = useTheme();
-	return <RNText {...props} style={[{ color: c.text }, style]} />;
+	const color =
+		tone === "muted"
+			? c.textMuted
+			: tone === "secondary"
+				? c.textSecondary
+				: tone === "accent"
+					? c.accentText
+					: c.text;
+	return <RNText {...props} style={[{ color }, variant && type[variant], style]} />;
 }
 
 export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
