@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch, registerUnauthorizedHandler } from '../api/client';
+import { unregisterFromPush } from '../api/push';
 import { clearUserCache } from '../api/userCache';
 import { clearToken, getToken, setToken as saveToken } from '../api/tokenStorage';
 
@@ -15,6 +16,10 @@ type User = {
   // before these settings existed; see reminderTimes().
   feeding_reminder_time?: string;
   walk_reminder_time?: string;
+  // Tell me when a co-owner feeds or walks the dog (server push). Missing on older profiles = on.
+  notify_co_owners?: boolean;
+  // Language of server-written pushes: 'nb' | 'en'.
+  locale?: string;
 };
 
 export const DEFAULT_FEEDING_REMINDER = '18:00';
@@ -34,7 +39,9 @@ export type RegisterInput = {
   password: string;
 };
 
-type ReminderTimePatch = Partial<Pick<User, 'feeding_reminder_time' | 'walk_reminder_time'>>;
+type SettingsPatch = Partial<
+  Pick<User, 'feeding_reminder_time' | 'walk_reminder_time' | 'notify_co_owners' | 'locale'>
+>;
 
 type AuthState = {
   user: User | null;
@@ -45,7 +52,7 @@ type AuthState = {
   register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   // Saves personal settings. Optimistic; resolves true when the server accepted them.
-  updateReminderTimes: (patch: ReminderTimePatch) => Promise<boolean>;
+  updateSettings: (patch: SettingsPatch) => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -58,6 +65,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const logout = useCallback(async () => {
     try {
       if (token) {
+        await unregisterFromPush();
         await apiFetch('/auth/logout', { method: 'POST' });
       }
     } catch {
@@ -130,8 +138,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     })();
   }, []);
 
-  const updateReminderTimes = useCallback(
-    async (patch: ReminderTimePatch): Promise<boolean> => {
+  const updateSettings = useCallback(
+    async (patch: SettingsPatch): Promise<boolean> => {
       const before = user;
       setUser((u) => (u ? { ...u, ...patch } : u));
       try {
@@ -148,8 +156,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   );
 
   const value = useMemo(
-    () => ({ user, token, isBootstrapping, login, register, logout, updateReminderTimes }),
-    [user, token, isBootstrapping, login, register, logout, updateReminderTimes]
+    () => ({ user, token, isBootstrapping, login, register, logout, updateSettings }),
+    [user, token, isBootstrapping, login, register, logout, updateSettings]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

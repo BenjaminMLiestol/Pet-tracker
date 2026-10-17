@@ -26,6 +26,7 @@ import { useMemo } from "react";
 import { useTheme, type Colors } from "./src/theme";
 import { Text } from "./src/components/themed";
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import PushSync from './src/context/PushSync';
 import { ToastProvider } from './src/components/Toast';
 
 function useNavigationTheme(): Theme {
@@ -175,6 +176,7 @@ export default function App() {
       <ToastProvider>
         <AuthProvider>
           <PetProvider>
+            <PushSync />
             <RemindersProvider>
               <CareProvider>
                 <ThemedNavigation>

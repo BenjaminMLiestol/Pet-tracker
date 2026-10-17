@@ -25,7 +25,7 @@ export default function ProfileScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { user, logout, updateReminderTimes } = useAuth();
+	const { user, logout, updateSettings } = useAuth();
 	const {
 		name: petName,
 		breed,
@@ -75,10 +75,10 @@ export default function ProfileScreen() {
 	useEffect(() => setFeedingTime(saved.feeding), [saved.feeding]);
 	useEffect(() => setWalkTime(saved.walk), [saved.walk]);
 	const saveFeeding = useDebouncedCommit(async (next: string) => {
-		if (next !== saved.feeding) report(await updateReminderTimes({ feeding_reminder_time: next }));
+		if (next !== saved.feeding) report(await updateSettings({ feeding_reminder_time: next }));
 	});
 	const saveWalk = useDebouncedCommit(async (next: string) => {
-		if (next !== saved.walk) report(await updateReminderTimes({ walk_reminder_time: next }));
+		if (next !== saved.walk) report(await updateSettings({ walk_reminder_time: next }));
 	});
 	const pickTime = (kind: "feeding" | "walk") => (date: Date) => {
 		const next = formatTime({ hour: date.getHours(), minute: date.getMinutes() });
@@ -271,6 +271,20 @@ export default function ProfileScreen() {
 								onChange={pickTime("walk")}
 							/>
 						</Animated.View>
+					)}
+					{owners.length > 1 && (
+						<Row
+							title={t("notify_co_owners")}
+							right={
+								<Switch
+									value={user?.notify_co_owners ?? true}
+									onValueChange={async (next) =>
+										report(await updateSettings({ notify_co_owners: next }))
+									}
+									accessibilityLabel={t("notify_co_owners")}
+								/>
+							}
+						/>
 					)}
 				</Group>
 				<Text variant="caption" tone="muted" style={styles.hint}>
