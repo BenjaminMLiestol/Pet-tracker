@@ -19,7 +19,8 @@
           "NSAllowsArbitraryLoads": true
         }
       },
-      "bundleIdentifier": "com.benjaminliestol.pettracker"
+      "bundleIdentifier": "com.benjaminliestol.pettracker",
+      "appleTeamId": "263TCJHLJG"
     },
     "android": {
       "adaptiveIcon": {
