@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Alert } from "react-native";
 import i18n from "../i18n";
+import { describeError } from "../api/errors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "../api/client";
 import { useAuth } from "./AuthContext";
@@ -214,7 +215,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			await fn();
 		} catch (e) {
 			if (e instanceof Error && e.message === "Unauthorized") return; // handled by logout
-			Alert.alert(i18n.t("error_title"), i18n.t("error_save_failed"));
+			Alert.alert(i18n.t("error_title"), describeError(e));
 		} finally {
 			inFlight.current = false;
 			setBusy(false);

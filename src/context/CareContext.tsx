@@ -9,7 +9,9 @@ import {
 	type ReactNode,
 } from "react";
 import { Alert } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import i18n from "../i18n";
+import { describeError } from "../api/errors";
 import { apiFetch } from "../api/client";
 import { useAuth } from "./AuthContext";
 import { usePet } from "./PetContext";
@@ -132,6 +134,10 @@ function toApi(kind: CareKind, petId: number, input: CareInput): ApiRow {
 	}
 }
 
+// Offline cache so the Care tab shows the last known records without a connection.
+export const CARE_CACHE_PREFIX = "pet-tracker/care-cache/v1";
+const careCacheKey = (petId: number) => `${CARE_CACHE_PREFIX}/${petId}`;
+
 const EMPTY: Record<CareKind, CareRecord[]> = {
 	vet: [],
 	vaccination: [],
@@ -160,6 +166,7 @@ export function CareProvider({ children }: { children: ReactNode }) {
 				.sort((a, b) => b.date - a.date);
 		});
 		setRecords(next);
+		AsyncStorage.setItem(careCacheKey(id), JSON.stringify(next)).catch(() => {});
 	}, []);
 
 	useEffect(() => {
@@ -167,7 +174,31 @@ export function CareProvider({ children }: { children: ReactNode }) {
 			setRecords(EMPTY);
 			return;
 		}
-		load(petId).catch((e) => console.warn("Failed to load care records", e));
+		let cancelled = false;
+		(async () => {
+			// Show the cached copy immediately, then refresh from the network.
+			try {
+				const raw = await AsyncStorage.getItem(careCacheKey(petId));
+				if (raw && !cancelled) {
+					const cached = JSON.parse(raw) as Partial<Record<CareKind, CareRecord[]>>;
+					setRecords({
+						vet: cached.vet ?? [],
+						vaccination: cached.vaccination ?? [],
+						parasite: cached.parasite ?? [],
+					});
+				}
+			} catch {
+				// ignore a malformed cache
+			}
+			try {
+				await load(petId);
+			} catch (e) {
+				console.warn("Failed to load care records", e);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
 	}, [token, petId, load]);
 
 	const refresh = useCallback(async () => {
@@ -190,7 +221,7 @@ export function CareProvider({ children }: { children: ReactNode }) {
 			return true;
 		} catch (e) {
 			if (!(e instanceof Error && e.message === "Unauthorized"))
-				Alert.alert(i18n.t("error_title"), i18n.t("error_save_failed"));
+				Alert.alert(i18n.t("error_title"), describeError(e));
 			return false;
 		} finally {
 			inFlight.current = false;
@@ -232,6 +263,15 @@ export function CareProvider({ children }: { children: ReactNode }) {
 		},
 		[run],
 	);
+
+	// Keep the cache in step with local add/remove between refreshes.
+	useEffect(() => {
+		// Skip the untouched initial state so it can't overwrite the cache before it is read.
+		if (petId == null || !token || records === EMPTY) return;
+		AsyncStorage.setItem(careCacheKey(petId), JSON.stringify(records)).catch(
+			() => {},
+		);
+	}, [records, petId, token]);
 
 	const value = useMemo(
 		() => ({ records, busy, refreshing, refresh, addRecord, removeRecord }),
