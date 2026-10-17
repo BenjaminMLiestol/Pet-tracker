@@ -78,6 +78,9 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 								<Pressable
 									key={p}
 									onPress={() => setParasiteType(p)}
+									accessibilityRole="radio"
+									accessibilityLabel={t(`parasite_${p}`)}
+									accessibilityState={{ selected: parasiteType === p }}
 									style={[styles.chip, parasiteType === p && styles.chipActive]}
 								>
 									<Text
@@ -98,6 +101,7 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 						value={name}
 						onChangeText={setName}
 						placeholder={t(`care_name_placeholder_${kind}`)}
+						accessibilityLabel={t(`care_name_placeholder_${kind}`)}
 						returnKeyType="done"
 					/>
 
@@ -105,7 +109,11 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 
 					<View style={styles.switchRow}>
 						<Text style={styles.switchLabel}>{t("care_set_next")}</Text>
-						<Switch value={hasNext} onValueChange={setHasNext} />
+						<Switch
+							value={hasNext}
+							onValueChange={setHasNext}
+							accessibilityLabel={t("care_set_next")}
+						/>
 					</View>
 					{hasNext && (
 						<DateField
@@ -120,6 +128,7 @@ export default function CareFormModal({ kind, busy, onClose, onSubmit }: Props) 
 						value={notes}
 						onChangeText={setNotes}
 						placeholder={t("care_notes_placeholder")}
+						accessibilityLabel={t("care_notes_placeholder")}
 						multiline
 					/>
 

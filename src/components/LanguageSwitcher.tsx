@@ -10,7 +10,7 @@ import { Text } from "./themed";
 export default function LanguageSwitcher() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const current = i18n.language;
 
   return (
@@ -18,12 +18,18 @@ export default function LanguageSwitcher() {
       <Pressable
         style={[styles.btn, current === 'nb' && styles.active]}
         onPress={() => setAppLanguage('nb')}
+        accessibilityRole="radio"
+        accessibilityLabel={t('language_nb')}
+        accessibilityState={{ selected: current === 'nb' }}
       >
         <Text style={styles.text}>Norsk (Bokmål)</Text>
       </Pressable>
       <Pressable
         style={[styles.btn, current === 'en' && styles.active]}
         onPress={() => setAppLanguage('en')}
+        accessibilityRole="radio"
+        accessibilityLabel={t('language_en')}
+        accessibilityState={{ selected: current === 'en' }}
       >
         <Text style={styles.text}>English</Text>
       </Pressable>

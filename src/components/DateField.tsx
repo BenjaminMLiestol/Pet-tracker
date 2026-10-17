@@ -30,6 +30,8 @@ export default function DateField({ label, value, onChange }: Props) {
 			{Platform.OS === "android" ? (
 				<Pressable
 					style={styles.androidValue}
+					accessibilityRole="button"
+					accessibilityLabel={`${label}: ${new Intl.DateTimeFormat(locale).format(value)}`}
 					onPress={() =>
 						DateTimePickerAndroid.open({
 							value,
@@ -45,6 +47,7 @@ export default function DateField({ label, value, onChange }: Props) {
 					value={value}
 					mode="date"
 					display="compact"
+					accessibilityLabel={label}
 					locale={locale}
 					themeVariant={c.isDark ? "dark" : "light"}
 					onChange={handle}

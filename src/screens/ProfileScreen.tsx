@@ -92,7 +92,11 @@ export default function ProfileScreen() {
 				<Text style={styles.cardTitle}>{t("reminders")}</Text>
 				<View style={styles.switchRow}>
 					<Text style={styles.switchLabel}>{t("reminders_enable")}</Text>
-					<Switch value={remindersOn} onValueChange={onToggleReminders} />
+					<Switch
+						value={remindersOn}
+						onValueChange={onToggleReminders}
+						accessibilityLabel={t("reminders_enable")}
+					/>
 				</View>
 				<Text style={styles.hint}>{t("reminders_hint")}</Text>
 			</View>

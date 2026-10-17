@@ -42,6 +42,8 @@ const LoginScreen: React.FC = () => {
 				autoComplete="email"
 				keyboardType="email-address"
 				placeholder={t("login_email")}
+				accessibilityLabel={t("login_email")}
+				textContentType="emailAddress"
 				value={email}
 				onChangeText={setEmail}
 				testID="email"
@@ -50,11 +52,21 @@ const LoginScreen: React.FC = () => {
 				style={styles.input}
 				secureTextEntry
 				placeholder={t("login_password")}
+				accessibilityLabel={t("login_password")}
+				autoComplete="current-password"
+				textContentType="password"
 				value={password}
 				onChangeText={setPassword}
 				testID="password"
 			/>
-			<Pressable style={styles.button} onPress={onSubmit} disabled={loading}>
+			<Pressable
+				style={styles.button}
+				onPress={onSubmit}
+				disabled={loading}
+				accessibilityRole="button"
+				accessibilityLabel={t("login_submit")}
+				accessibilityState={{ disabled: loading, busy: loading }}
+			>
 				{loading ? (
 					<ActivityIndicator />
 				) : (

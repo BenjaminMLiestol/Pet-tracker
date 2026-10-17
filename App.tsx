@@ -78,7 +78,13 @@ function AppTabs() {
         headerTitle: () => <HeaderTitle />,
         headerTitleAlign: 'center',
         headerRight: () => (
-          <Pressable onPress={logout} style={{ paddingRight: 16 }}>
+          <Pressable
+            onPress={logout}
+            style={{ paddingRight: 16 }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('logout')}
+          >
             <Ionicons name="log-out-outline" size={20} color={c.text} />
           </Pressable>
         ),

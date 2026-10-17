@@ -79,6 +79,7 @@ export default function WeightScreen() {
 					<View style={styles.formRow}>
 						<TextInput
 							placeholder={t("placeholder_weight")}
+							accessibilityLabel={t("weight_input_label")}
 							value={input}
 							onChangeText={setInput}
 							keyboardType="numeric"
