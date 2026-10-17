@@ -50,7 +50,14 @@ export type PetContextValue = {
 	// ⬇️ New for pull-to-refresh
 	refresh: () => Promise<void>;
 	refreshing: boolean;
+
+	// Infinite scroll for the long logs (100 more entries per call)
+	loadMore: (kind: PagedKind) => Promise<void>;
+	hasMore: Record<PagedKind, boolean>;
+	loadingMore: Record<PagedKind, boolean>;
 };
+
+export type PagedKind = "feedings" | "walks";
 
 const PetContext = createContext<PetContextValue | undefined>(undefined);
 
@@ -92,6 +99,43 @@ type ApiWeight = {
 // Accept either an array or { data: [...] }.
 function unwrapList<T>(res: T[] | { data: T[] }): T[] {
 	return Array.isArray(res) ? res : (res?.data ?? []);
+}
+
+// Laravel paginator: { data, current_page, last_page, ... }
+type Paged<T> = T[] | { data: T[]; current_page?: number; last_page?: number };
+type Page<T> = { rows: T[]; hasMore: boolean };
+
+function unwrapPage<T>(res: Paged<T>): Page<T> {
+	if (Array.isArray(res)) return { rows: res, hasMore: false };
+	return {
+		rows: res?.data ?? [],
+		hasMore: (res?.current_page ?? 1) < (res?.last_page ?? 1),
+	};
+}
+
+const PAGE_SIZE = 100; // feedings / walks / baths per request
+const WEIGHT_PAGE_SIZE = 500; // the weight chart wants the full history
+
+const mapFeeding = (f: ApiFeeding): FeedingRecord => ({
+	id: f.id,
+	timestamp: Date.parse(f.fed_at),
+	fed: !!f.feed_check,
+});
+const mapWalk = (w: ApiWalk): WalkRecord => ({
+	id: w.id,
+	timestamp: Date.parse(w.walked_at),
+	walked: !!w.walk_check,
+});
+
+// Append a loaded page, dropping rows we already have, newest first.
+function mergeById<T extends { id: number; timestamp: number }>(
+	prev: T[],
+	incoming: T[],
+): T[] {
+	const seen = new Set(prev.map((r) => r.id));
+	return [...prev, ...incoming.filter((r) => !seen.has(r.id))].sort(
+		(a, b) => b.timestamp - a.timestamp,
+	);
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -144,6 +188,21 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	// Pull-to-refresh state
 	const [refreshing, setRefreshing] = useState(false);
 
+	// Infinite-scroll state: next page to request and whether more exist
+	const nextPage = useRef<Record<PagedKind, number>>({ feedings: 2, walks: 2 });
+	const loadingMoreRef = useRef<Record<PagedKind, boolean>>({
+		feedings: false,
+		walks: false,
+	});
+	const [hasMore, setHasMore] = useState<Record<PagedKind, boolean>>({
+		feedings: false,
+		walks: false,
+	});
+	const [loadingMore, setLoadingMore] = useState<Record<PagedKind, boolean>>({
+		feedings: false,
+		walks: false,
+	});
+
 	// Save-in-flight guard: blocks double taps and surfaces failures to the user
 	const [busy, setBusy] = useState(false);
 	const inFlight = useRef(false);
@@ -173,33 +232,28 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
 	// ---- Helper: fetch activities for a given pet id ----
 	const fetchActivities = useCallback(async (petId: number) => {
+		const list = (path: string, size: number, page = 1) =>
+			`${path}?pet_id=${petId}&per_page=${size}&page=${page}`;
 		const [feedingsRaw, walksRaw, bathsRaw, weightsRaw] = await Promise.all([
-			apiFetch<ApiFeeding[] | { data: ApiFeeding[] }>(
-				`/feedings?pet_id=${petId}`,
-			),
-			apiFetch<ApiWalk[] | { data: ApiWalk[] }>(`/walks?pet_id=${petId}`),
-			apiFetch<ApiBath[] | { data: ApiBath[] }>(`/baths?pet_id=${petId}`),
-			apiFetch<ApiWeight[] | { data: ApiWeight[] }>(`/weights?pet_id=${petId}`),
+			apiFetch<Paged<ApiFeeding>>(list("/feedings", PAGE_SIZE)),
+			apiFetch<Paged<ApiWalk>>(list("/walks", PAGE_SIZE)),
+			apiFetch<Paged<ApiBath>>(list("/baths", PAGE_SIZE)),
+			apiFetch<Paged<ApiWeight>>(list("/weights", WEIGHT_PAGE_SIZE)),
 		]);
 
-		setFeedings(
-			unwrapList(feedingsRaw)
-				.map((f) => ({
-					id: f.id,
-					timestamp: Date.parse(f.fed_at),
-					fed: !!f.feed_check,
-				}))
-				.sort((a, b) => b.timestamp - a.timestamp),
-		);
+		const feedingsPage = unwrapPage(feedingsRaw);
+		const walksPage = unwrapPage(walksRaw);
+		nextPage.current = { feedings: 2, walks: 2 };
+		setHasMore({
+			feedings: feedingsPage.hasMore,
+			walks: walksPage.hasMore,
+		});
 
+		setFeedings(
+			feedingsPage.rows.map(mapFeeding).sort((a, b) => b.timestamp - a.timestamp),
+		);
 		setWalks(
-			unwrapList(walksRaw)
-				.map((w) => ({
-					id: w.id,
-					timestamp: Date.parse(w.walked_at),
-					walked: !!w.walk_check,
-				}))
-				.sort((a, b) => b.timestamp - a.timestamp),
+			walksPage.rows.map(mapWalk).sort((a, b) => b.timestamp - a.timestamp),
 		);
 
 		setBaths(
@@ -217,6 +271,36 @@ export function PetProvider({ children }: { children: ReactNode }) {
 				.sort((a, b) => b.timestamp - a.timestamp),
 		);
 	}, []);
+
+	// ---- Infinite scroll: fetch the next 100 feedings/walks ----
+	const loadMore = useCallback(
+		async (kind: PagedKind) => {
+			if (!pet || !hasMore[kind] || loadingMoreRef.current[kind]) return;
+			loadingMoreRef.current[kind] = true;
+			setLoadingMore((prev) => ({ ...prev, [kind]: true }));
+			const petId = pet.id;
+			try {
+				const page = nextPage.current[kind];
+				const url = `/${kind}?pet_id=${petId}&per_page=${PAGE_SIZE}&page=${page}`;
+				if (kind === "feedings") {
+					const res = unwrapPage(await apiFetch<Paged<ApiFeeding>>(url));
+					setFeedings((prev) => mergeById(prev, res.rows.map(mapFeeding)));
+					setHasMore((prev) => ({ ...prev, feedings: res.hasMore }));
+				} else {
+					const res = unwrapPage(await apiFetch<Paged<ApiWalk>>(url));
+					setWalks((prev) => mergeById(prev, res.rows.map(mapWalk)));
+					setHasMore((prev) => ({ ...prev, walks: res.hasMore }));
+				}
+				nextPage.current[kind] = page + 1;
+			} catch (e) {
+				console.warn(`Failed to load more ${kind}`, e);
+			} finally {
+				loadingMoreRef.current[kind] = false;
+				setLoadingMore((prev) => ({ ...prev, [kind]: false }));
+			}
+		},
+		[pet, hasMore],
+	);
 
 	// ---- Public: refresh for pull-to-refresh ----
 	const refresh = useCallback(async () => {
@@ -465,6 +549,11 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			// pull-to-refresh
 			refresh,
 			refreshing,
+
+			// infinite scroll
+			loadMore,
+			hasMore,
+			loadingMore,
 		};
 	}, [
 		pet,
@@ -481,6 +570,9 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		busy,
 		refresh,
 		refreshing,
+		loadMore,
+		hasMore,
+		loadingMore,
 	]);
 
 	return <PetContext.Provider value={value}>{children}</PetContext.Provider>;

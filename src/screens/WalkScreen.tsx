@@ -5,7 +5,8 @@ import ActivityLogScreen from "../components/ActivityLogScreen";
 
 export default function WalkScreen() {
 	const { t } = useTranslation();
-	const { walks, walksToday, addWalk, removeWalk } = usePet();
+	const { walks, walksToday, addWalk, removeWalk, loadMore, loadingMore } =
+		usePet();
 
 	return (
 		<ActivityLogScreen
@@ -16,6 +17,8 @@ export default function WalkScreen() {
 			countToday={walksToday}
 			onAdd={addWalk}
 			onRemove={removeWalk}
+			onLoadMore={() => loadMore("walks")}
+			loadingMore={loadingMore.walks}
 		/>
 	);
 }

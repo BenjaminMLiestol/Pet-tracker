@@ -7,6 +7,7 @@ import {
 	Pressable,
 	Alert,
 	Button,
+	ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -23,6 +24,9 @@ type Props = {
 	countToday: number;
 	onAdd: () => void;
 	onRemove: (id: number) => void;
+	// Infinite scroll: called near the end of the list
+	onLoadMore: () => void;
+	loadingMore: boolean;
 };
 
 // Shared log screen for repeatable per-day activities (feedings, walks).
@@ -34,6 +38,8 @@ export default function ActivityLogScreen({
 	countToday,
 	onAdd,
 	onRemove,
+	onLoadMore,
+	loadingMore,
 }: Props) {
 	const { t, i18n } = useTranslation();
 	const { name, busy, refresh, refreshing } = usePet();
@@ -62,6 +68,11 @@ export default function ActivityLogScreen({
 			data={sorted}
 			refreshing={isFocused && refreshing}
 			onRefresh={refresh}
+			onEndReached={onLoadMore}
+			onEndReachedThreshold={0.5}
+			ListFooterComponent={
+				loadingMore ? <ActivityIndicator style={styles.footer} /> : null
+			}
 			keyExtractor={(item) => String(item.id)}
 			ListHeaderComponent={
 				<>
@@ -143,5 +154,6 @@ const styles = StyleSheet.create({
 	listRowTitle: { color: "#111827" },
 	separator: { height: 1, backgroundColor: "#e5e7eb" },
 
+	footer: { paddingVertical: 16 },
 	helperText: { color: "#6b7280", paddingVertical: 8 },
 });
