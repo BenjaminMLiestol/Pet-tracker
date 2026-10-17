@@ -37,7 +37,7 @@ export default function HomeScreen() {
 		i18n.language === "nb" ? "nb-NO" : "en-US",
 	);
 	const lastBathText = lastBathAt
-		? `${df.format(lastBathAt)} (${formatRelativeDays(lastBathAt, t, i18n.language)})`
+		? `${df.format(lastBathAt)} (${formatRelativeDays(lastBathAt, t)})`
 		: t("not_recorded");
 
 	const weightText =
@@ -106,15 +106,11 @@ export default function HomeScreen() {
 function formatRelativeDays(
 	date: Date,
 	t: (k: string, o?: any) => string,
-	lang: string,
 ): string {
 	const msPerDay = 1000 * 60 * 60 * 24;
-	const diff = Date.now() - date.getTime();
-	const days = Math.floor(diff / msPerDay);
-	if (days === 0) return t("today");
-	if (days === 1)
-		return lang.startsWith("nb") ? "for 1 dag siden" : "1 day ago";
-	return lang.startsWith("nb") ? `for ${days} dager siden` : `${days} days ago`;
+	const days = Math.floor((Date.now() - date.getTime()) / msPerDay);
+	if (days <= 0) return t("today");
+	return t("days_ago", { count: days });
 }
 
 const styles = StyleSheet.create({

@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch, registerUnauthorizedHandler } from '../api/client';
+import { clearToken, getToken, setToken as saveToken } from '../api/tokenStorage';
 
 type User = {
   id: number;
@@ -35,7 +36,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } catch {
       // ignore network errors on logout
     } finally {
-      await AsyncStorage.multiRemove(['authToken', 'authUser']);
+      await Promise.all([clearToken(), AsyncStorage.removeItem('authUser')]);
       setToken(null);
       setUser(null);
     }
@@ -53,19 +54,18 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       method: 'POST',
       body: { email, password },
     });
+    // Persist before updating state: setting the token triggers data fetches that read it from storage.
+    await saveToken(res.token);
+    await AsyncStorage.setItem('authUser', JSON.stringify(res.user));
     setUser(res.user);
     setToken(res.token);
-    await AsyncStorage.setItem('authToken', res.token);
-    await AsyncStorage.setItem('authUser', JSON.stringify(res.user));
   }, []);
 
   // Bootstrap from storage
   useEffect(() => {
     (async () => {
       try {
-        const [storedToken, storedUser] = await AsyncStorage.multiGet(['authToken', 'authUser']);
-        const token = storedToken[1];
-        const userStr = storedUser[1];
+        const [token, userStr] = await Promise.all([getToken(), AsyncStorage.getItem('authUser')]);
         if (token && userStr) {
           setToken(token);
           setUser(JSON.parse(userStr) as User);

@@ -95,13 +95,14 @@ function AppTabs() {
 
 function RootNavigator() {
   const { token, isBootstrapping } = useAuth();
+  const { t } = useTranslation();
 
   if (isBootstrapping) {
     // splash/loader placeholder
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name="paw" size={28} />
-        <Text style={{ marginTop: 8 }}>Loading…</Text>
+        <Text style={{ marginTop: 8 }}>{t('loading')}</Text>
       </View>
     );
   }

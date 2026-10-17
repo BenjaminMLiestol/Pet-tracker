@@ -6,7 +6,10 @@ import {
 	useState,
 	useCallback,
 	useEffect,
+	useRef,
 } from "react";
+import { Alert } from "react-native";
+import i18n from "../i18n";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "../api/client";
 import { useAuth } from "./AuthContext";
@@ -32,8 +35,12 @@ export type PetContextValue = {
 	setBathedToday: () => Promise<void>;
 	setWalkedToday: (walked: boolean) => Promise<void>;
 	nextBathDueAt: Date | null;
-	isBathDueToday: boolean;
+	isBathDue: boolean;
+	bathOverdueDays: number;
 	setWeightToday: (weightKg: number) => Promise<void>;
+
+	// True while a save request is in flight
+	busy: boolean;
 
 	// ⬇️ New for pull-to-refresh
 	refresh: () => Promise<void>;
@@ -90,6 +97,10 @@ function isSameDay(a: Date, b: Date): boolean {
 	);
 }
 
+function startOfDay(d: Date): Date {
+	return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 function getLatestTimestamp<T extends { timestamp: number }>(
 	items: T[],
 ): number | null {
@@ -127,6 +138,24 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
 	// Pull-to-refresh state
 	const [refreshing, setRefreshing] = useState(false);
+
+	// Save-in-flight guard: blocks double taps and surfaces failures to the user
+	const [busy, setBusy] = useState(false);
+	const inFlight = useRef(false);
+	const runMutation = useCallback(async (fn: () => Promise<void>) => {
+		if (inFlight.current) return;
+		inFlight.current = true;
+		setBusy(true);
+		try {
+			await fn();
+		} catch (e) {
+			if (e instanceof Error && e.message === "Unauthorized") return; // handled by logout
+			Alert.alert(i18n.t("error_title"), i18n.t("error_save_failed"));
+		} finally {
+			inFlight.current = false;
+			setBusy(false);
+		}
+	}, []);
 
 	// ---- Persist state to cache whenever it changes ----
 	useEffect(() => {
@@ -270,7 +299,8 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
 	// ---- Mutations: API-first (keeps server as source of truth), cache persists via effect ----
 	const setFedToday = useCallback(
-		async (fed: boolean) => {
+		(fed: boolean) =>
+			runMutation(async () => {
 			if (!pet) return;
 
 			const nowIso = new Date().toISOString();
@@ -317,22 +347,27 @@ export function PetProvider({ children }: { children: ReactNode }) {
 				await apiFetch(`/feedings/${latestToday.id}`, { method: "DELETE" });
 				setFeedings((prev) => prev.filter((f) => f.id !== latestToday.id));
 			}
-		},
-		[pet, feedings],
+			}),
+		[pet, feedings, runMutation],
 	);
 
-	const setBathedToday = useCallback(async () => {
-		if (!pet) return;
-		const nowIso = new Date().toISOString();
-		await apiFetch("/baths", {
-			method: "POST",
-			body: { pet_id: pet.id, bathed_at: nowIso },
-		});
-		setBaths((prev) => [{ timestamp: Date.parse(nowIso) }, ...prev]);
-	}, [pet]);
+	const setBathedToday = useCallback(
+		() =>
+			runMutation(async () => {
+				if (!pet) return;
+				const nowIso = new Date().toISOString();
+				await apiFetch("/baths", {
+					method: "POST",
+					body: { pet_id: pet.id, bathed_at: nowIso },
+				});
+				setBaths((prev) => [{ timestamp: Date.parse(nowIso) }, ...prev]);
+			}),
+		[pet, runMutation],
+	);
 
 	const setWalkedToday = useCallback(
-		async (walked: boolean) => {
+		(walked: boolean) =>
+			runMutation(async () => {
 			if (!pet) return;
 			const nowIso = new Date().toISOString();
 			const today = new Date();
@@ -378,24 +413,25 @@ export function PetProvider({ children }: { children: ReactNode }) {
 				await apiFetch(`/walks/${latestToday.id}`, { method: "DELETE" });
 				setWalks((prev) => prev.filter((w) => w.id !== latestToday.id));
 			}
-		},
-		[pet, walks],
+			}),
+		[pet, walks, runMutation],
 	);
 
 	const setWeightToday = useCallback(
-		async (weightKg: number) => {
-			if (!pet || !Number.isFinite(weightKg) || weightKg <= 0) return;
-			const nowIso = new Date().toISOString();
-			await apiFetch("/weights", {
-				method: "POST",
-				body: { pet_id: pet.id, value: weightKg, weighed_at: nowIso },
-			});
-			setWeights((prev) => [
-				{ timestamp: Date.parse(nowIso), weightKg },
-				...prev,
-			]);
-		},
-		[pet],
+		(weightKg: number) =>
+			runMutation(async () => {
+				if (!pet || !Number.isFinite(weightKg) || weightKg <= 0) return;
+				const nowIso = new Date().toISOString();
+				await apiFetch("/weights", {
+					method: "POST",
+					body: { pet_id: pet.id, value: weightKg, weighed_at: nowIso },
+				});
+				setWeights((prev) => [
+					{ timestamp: Date.parse(nowIso), weightKg },
+					...prev,
+				]);
+			}),
+		[pet, runMutation],
 	);
 
 	// ---- Derived values ----
@@ -416,9 +452,15 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		const nextBathDueAt = lastBathAt
 			? new Date(lastBathAt.getTime() + monthMs)
 			: today;
-		const isBathDueToday = nextBathDueAt
-			? isSameDay(today, nextBathDueAt)
-			: false;
+		// Due on the due date and every day after it until a bath is logged.
+		const isBathDue = today.getTime() >= startOfDay(nextBathDueAt).getTime();
+		const bathOverdueDays = Math.max(
+			0,
+			Math.round(
+				(startOfDay(today).getTime() - startOfDay(nextBathDueAt).getTime()) /
+					(1000 * 60 * 60 * 24),
+			),
+		);
 
 		const latestWeightTs = getLatestTimestamp(weights);
 		const currentWeightKg = latestWeightTs
@@ -440,8 +482,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			setBathedToday,
 			setWalkedToday,
 			nextBathDueAt,
-			isBathDueToday,
+			isBathDue,
+			bathOverdueDays,
 			setWeightToday,
+			busy,
 
 			// pull-to-refresh
 			refresh,
@@ -457,6 +501,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		setBathedToday,
 		setWalkedToday,
 		setWeightToday,
+		busy,
 		refresh,
 		refreshing,
 	]);

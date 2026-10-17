@@ -8,9 +8,11 @@ import {
 	ActivityIndicator,
 	Alert,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 
 const LoginScreen: React.FC = () => {
+	const { t } = useTranslation();
 	const { login } = useAuth();
 	const [email, setEmail] = useState(""); // prefill for dev if you want
 	const [password, setPassword] = useState(""); // prefill for dev if you want
@@ -18,14 +20,17 @@ const LoginScreen: React.FC = () => {
 
 	const onSubmit = async () => {
 		if (!email || !password) {
-			Alert.alert("Missing info", "Please enter email and password.");
+			Alert.alert(t("login_missing_title"), t("login_missing_message"));
 			return;
 		}
 		setLoading(true);
 		try {
 			await login(email.trim(), password);
 		} catch (e: any) {
-			Alert.alert("Login failed", e?.message ?? "Unknown error");
+			Alert.alert(
+				t("login_failed_title"),
+				e?.message ?? t("login_failed_unknown"),
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -33,13 +38,13 @@ const LoginScreen: React.FC = () => {
 
 	return (
 		<View style={styles.container}>
-			<Text style={styles.title}>Welcome back 👋</Text>
+			<Text style={styles.title}>{t("login_welcome")}</Text>
 			<TextInput
 				style={styles.input}
 				autoCapitalize="none"
 				autoComplete="email"
 				keyboardType="email-address"
-				placeholder="Email"
+				placeholder={t("login_email")}
 				value={email}
 				onChangeText={setEmail}
 				testID="email"
@@ -47,7 +52,7 @@ const LoginScreen: React.FC = () => {
 			<TextInput
 				style={styles.input}
 				secureTextEntry
-				placeholder="Password"
+				placeholder={t("login_password")}
 				value={password}
 				onChangeText={setPassword}
 				testID="password"
@@ -56,7 +61,7 @@ const LoginScreen: React.FC = () => {
 				{loading ? (
 					<ActivityIndicator />
 				) : (
-					<Text style={styles.buttonText}>Log in</Text>
+					<Text style={styles.buttonText}>{t("login_submit")}</Text>
 				)}
 			</Pressable>
 		</View>

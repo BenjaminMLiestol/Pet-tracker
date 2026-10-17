@@ -16,7 +16,9 @@ export default function BathsScreen() {
 	const {
 		baths,
 		nextBathDueAt,
-		isBathDueToday,
+		isBathDue,
+		bathOverdueDays,
+		busy,
 		setBathedToday,
 		refresh,
 		refreshing,
@@ -67,8 +69,17 @@ export default function BathsScreen() {
 					<Text style={styles.label}>{t("due")}: </Text>
 					{nextBathText}
 				</Text>
-				{isBathDueToday ? (
-					<Button title={t("mark_bathed_today")} onPress={setBathedToday} />
+				{bathOverdueDays > 0 && (
+					<Text style={styles.overdueText}>
+						{t("bath_overdue", { count: bathOverdueDays })}
+					</Text>
+				)}
+				{isBathDue ? (
+					<Button
+						title={t("mark_bathed_today")}
+						onPress={setBathedToday}
+						disabled={busy}
+					/>
 				) : (
 					<Text style={styles.helperText}>{t("monthly_schedule_hint")}</Text>
 				)}
@@ -123,6 +134,7 @@ const styles = StyleSheet.create({
 	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
 	row: { fontSize: 16, marginBottom: 8 },
 	label: { color: "#374151", fontWeight: "600" },
+	overdueText: { color: "#dc2626", fontWeight: "600", marginBottom: 8 },
 	helperText: { color: "#6b7280", marginTop: 8 },
 	chartContainer: { height: 120 },
 	chartBars: { flex: 1, flexDirection: "row", alignItems: "flex-end" },

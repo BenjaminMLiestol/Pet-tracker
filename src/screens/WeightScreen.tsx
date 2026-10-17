@@ -16,8 +16,14 @@ import { useIsFocused } from "@react-navigation/native";
 
 export default function WeightScreen() {
 	const { t, i18n } = useTranslation();
-	const { currentWeightKg, weights, setWeightToday, refresh, refreshing } =
-		usePet();
+	const {
+		currentWeightKg,
+		weights,
+		setWeightToday,
+		busy,
+		refresh,
+		refreshing,
+	} = usePet();
 	const [input, setInput] = useState("");
 	const inputRef = useRef<TextInput>(null);
 	const isFocused = useIsFocused();
@@ -81,7 +87,7 @@ export default function WeightScreen() {
 							returnKeyType="done"
 							onSubmitEditing={onSave}
 						/>
-						<Button title={t("save")} onPress={onSave} />
+						<Button title={t("save")} onPress={onSave} disabled={busy} />
 					</View>
 				</View>
 
