@@ -25,7 +25,7 @@ export default function ProfileScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { user, logout, updateSettings } = useAuth();
+	const { user, logout, logoutEverywhere, updateSettings } = useAuth();
 	const {
 		name: petName,
 		breed,
@@ -305,6 +305,23 @@ export default function ProfileScreen() {
 					icon="log-out-outline"
 					color={c.danger}
 					onPress={logout}
+				/>
+				<AppButton
+					variant="ghost"
+					title={t("logout_all")}
+					color={c.danger}
+					onPress={() =>
+						Alert.alert(t("logout_all_title"), t("logout_all_body"), [
+							{ text: t("cancel"), style: "cancel" },
+							{
+								text: t("logout_all"),
+								style: "destructive",
+								onPress: async () => {
+									if (!(await logoutEverywhere())) toast.show(t("logout_all_failed"), "error");
+								},
+							},
+						])
+					}
 				/>
 			</View>
 			<DogManagerModal visible={dogsOpen} onClose={() => setDogsOpen(false)} />

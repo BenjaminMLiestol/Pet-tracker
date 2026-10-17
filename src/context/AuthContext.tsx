@@ -1,8 +1,10 @@
 // src/context/AuthContext.tsx
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch, registerUnauthorizedHandler } from '../api/client';
 import { unregisterFromPush } from '../api/push';
+import { refreshSession, resetSessionRefresh } from '../api/session';
 import { clearUserCache } from '../api/userCache';
 import { clearToken, getToken, setToken as saveToken } from '../api/tokenStorage';
 
@@ -51,6 +53,8 @@ type AuthState = {
   // Creates an account and signs in. Throws an error whose message is safe to show.
   register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
+  // Signs out every phone and session of this account.
+  logoutEverywhere: () => Promise<boolean>;
   // Saves personal settings. Optimistic; resolves true when the server accepted them.
   updateSettings: (patch: SettingsPatch) => Promise<boolean>;
 };
@@ -62,6 +66,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [token, setToken] = useState<string | null>(null);
   const [isBootstrapping, setBootstrapping] = useState(true);
 
+  // Local sign-out: reset state first so nothing re-persists, then wipe the previous
+  // user's cached data. Never talks to the server (the login may already be dead).
+  const endSession = useCallback(async () => {
+    setToken(null);
+    setUser(null);
+    await Promise.all([clearToken(), AsyncStorage.removeItem('authUser'), clearUserCache()]);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       if (token) {
@@ -71,19 +83,30 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } catch {
       // ignore network errors on logout
     } finally {
-      // Reset state first so nothing re-persists, then wipe the previous user's cached data.
-      setToken(null);
-      setUser(null);
-      await Promise.all([clearToken(), AsyncStorage.removeItem('authUser'), clearUserCache()]);
+      await endSession();
     }
-  }, [token]);
+  }, [token, endSession]);
 
-  // if any request gets 401, force logout
+  // Resolves true when every session was revoked. Offline or failed: stay signed in, so the
+  // person knows it didn't happen.
+  const logoutEverywhere = useCallback(async () => {
+    try {
+      await unregisterFromPush();
+      await apiFetch('/auth/logout-all', { method: 'POST' });
+    } catch {
+      return false;
+    }
+    await endSession();
+    return true;
+  }, [endSession]);
+
+  // An expired or revoked login (any 401) ends the session locally. It must not call
+  // /auth/logout: that would 401 too and loop.
   useEffect(() => {
     registerUnauthorizedHandler(() => {
-      logout();
+      endSession();
     });
-  }, [logout]);
+  }, [endSession]);
 
   // Persist before updating state: setting the token triggers data fetches that read it from storage.
   const signIn = useCallback(async (res: { user: User; token: string }) => {
@@ -91,6 +114,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     await AsyncStorage.setItem('authUser', JSON.stringify(res.user));
     setUser(res.user);
     setToken(res.token);
+    resetSessionRefresh();
   }, []);
 
   const login = useCallback(
@@ -115,6 +139,22 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     [signIn]
   );
 
+  // Takes a refreshed profile into state and the saved copy.
+  const adopt = useCallback((me: User | null) => {
+    if (!me) return;
+    setUser(me);
+    AsyncStorage.setItem('authUser', JSON.stringify(me)).catch(() => {});
+  }, []);
+
+  // Coming back to the foreground after a while renews the login too.
+  useEffect(() => {
+    if (!token) return;
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refreshSession<User>().then(adopt);
+    });
+    return () => sub.remove();
+  }, [token, adopt]);
+
   // Bootstrap from storage
   useEffect(() => {
     (async () => {
@@ -123,14 +163,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         if (token && userStr) {
           setToken(token);
           setUser(JSON.parse(userStr) as User);
-          // Quietly refresh the profile: picks up settings changed on another device (and
-          // fills in fields older saved profiles lack). A 401 here logs out an expired login.
-          apiFetch<User>('/auth/me')
-            .then((me) => {
-              setUser(me);
-              return AsyncStorage.setItem('authUser', JSON.stringify(me));
-            })
-            .catch(() => {});
+          // Swap in a fresh week-long login and pick up settings changed on another device.
+          // A 401 here (expired login) signs out.
+          refreshSession<User>({ force: true }).then(adopt);
         }
       } finally {
         setBootstrapping(false);
@@ -156,8 +191,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   );
 
   const value = useMemo(
-    () => ({ user, token, isBootstrapping, login, register, logout, updateSettings }),
-    [user, token, isBootstrapping, login, register, logout, updateSettings]
+    () => ({ user, token, isBootstrapping, login, register, logout, logoutEverywhere, updateSettings }),
+    [user, token, isBootstrapping, login, register, logout, logoutEverywhere, updateSettings]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
