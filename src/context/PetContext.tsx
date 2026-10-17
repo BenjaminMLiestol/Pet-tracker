@@ -11,6 +11,7 @@ import {
 import { Alert } from "react-native";
 import i18n from "../i18n";
 import { describeError } from "../api/errors";
+import { calendarDay, deviceTimeZone, isSameDay } from "../utils/dates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "../api/client";
 import { useAuth } from "./AuthContext";
@@ -23,6 +24,8 @@ export type WeightRecord = { timestamp: number; weightKg: number };
 
 export type PetContextValue = {
 	petId: number | null;
+	// IANA timezone that defines where a day starts for this pet
+	timezone: string;
 	name: string;
 	breed: string;
 	feedings: FeedingRecord[];
@@ -68,6 +71,7 @@ type ApiPet = {
 	name: string;
 	age?: number | null;
 	breed?: string | null;
+	timezone?: string | null;
 };
 type ApiFeeding = {
 	id: number;
@@ -137,18 +141,6 @@ function mergeById<T extends { id: number; timestamp: number }>(
 	return [...prev, ...incoming.filter((r) => !seen.has(r.id))].sort(
 		(a, b) => b.timestamp - a.timestamp,
 	);
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-	return (
-		a.getFullYear() === b.getFullYear() &&
-		a.getMonth() === b.getMonth() &&
-		a.getDate() === b.getDate()
-	);
-}
-
-function startOfDay(d: Date): Date {
-	return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 function getLatestTimestamp<T extends { timestamp: number }>(
@@ -491,12 +483,13 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	// ---- Derived values ----
 	const value = useMemo<PetContextValue>(() => {
 		const today = new Date();
+		const timezone = pet?.timezone || deviceTimeZone();
 
 		const feedingsToday = feedings.filter(
-			(f) => f.fed && isSameDay(new Date(f.timestamp), today),
+			(f) => f.fed && isSameDay(f.timestamp, today.getTime(), timezone),
 		).length;
 		const walksToday = walks.filter(
-			(w) => w.walked && isSameDay(new Date(w.timestamp), today),
+			(w) => w.walked && isSameDay(w.timestamp, today.getTime(), timezone),
 		).length;
 		const hasFedToday = feedingsToday > 0;
 		const hasWalkedToday = walksToday > 0;
@@ -509,14 +502,14 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			? new Date(lastBathAt.getTime() + monthMs)
 			: today;
 		// Due on the due date and every day after it until a bath is logged.
-		const isBathDue = today.getTime() >= startOfDay(nextBathDueAt).getTime();
 		const bathOverdueDays = Math.max(
 			0,
-			Math.round(
-				(startOfDay(today).getTime() - startOfDay(nextBathDueAt).getTime()) /
-					(1000 * 60 * 60 * 24),
-			),
+			calendarDay(today.getTime(), timezone) -
+				calendarDay(nextBathDueAt.getTime(), timezone),
 		);
+		const isBathDue =
+			calendarDay(today.getTime(), timezone) >=
+			calendarDay(nextBathDueAt.getTime(), timezone);
 
 		const latestWeightTs = getLatestTimestamp(weights);
 		const currentWeightKg = latestWeightTs
@@ -525,6 +518,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
 		return {
 			petId: pet?.id ?? null,
+			timezone,
 			name: pet?.name ?? "",
 			breed: pet?.breed ?? "",
 			feedings,

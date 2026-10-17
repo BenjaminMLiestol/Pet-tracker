@@ -14,19 +14,16 @@ import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { useCare, type CareKind, type CareRecord } from "../context/CareContext";
 import CareFormModal from "../components/CareFormModal";
+import { usePet } from "../context/PetContext";
+import { daysBetween } from "../utils/dates";
 
 const KINDS: CareKind[] = ["vet", "vaccination", "parasite"];
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function startOfDay(ms: number): number {
-	const d = new Date(ms);
-	return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
 
 export default function CareScreen() {
 	const { t, i18n } = useTranslation();
 	const { records, busy, refreshing, refresh, addRecord, removeRecord } =
 		useCare();
+	const { timezone } = usePet();
 	const isFocused = useIsFocused();
 	const [formKind, setFormKind] = useState<CareKind | null>(null);
 
@@ -44,9 +41,7 @@ export default function CareScreen() {
 
 	const dueStatus = (r: CareRecord) => {
 		if (!r.nextDueAt) return null;
-		const diff = Math.round(
-			(startOfDay(r.nextDueAt) - startOfDay(Date.now())) / DAY_MS,
-		);
+		const diff = daysBetween(Date.now(), r.nextDueAt, timezone);
 		if (diff < 0)
 			return { text: t("care_overdue", { count: -diff }), color: "#dc2626" };
 		if (diff === 0) return { text: t("care_due_today"), color: "#d97706" };

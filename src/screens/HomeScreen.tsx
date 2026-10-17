@@ -7,6 +7,7 @@ import {
 	ScrollView,
 	RefreshControl,
 } from "react-native";
+import { daysBetween } from "../utils/dates";
 import { usePet } from "../context/PetContext";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
@@ -22,6 +23,7 @@ export default function HomeScreen() {
 		walksToday,
 		lastBathAt,
 		currentWeightKg,
+		timezone,
 		refresh,
 		refreshing,
 	} = usePet();
@@ -37,7 +39,7 @@ export default function HomeScreen() {
 		i18n.language === "nb" ? "nb-NO" : "en-US",
 	);
 	const lastBathText = lastBathAt
-		? `${df.format(lastBathAt)} (${formatRelativeDays(lastBathAt, t)})`
+		? `${df.format(lastBathAt)} (${formatRelativeDays(lastBathAt, timezone, t)})`
 		: t("not_recorded");
 
 	const weightText =
@@ -105,10 +107,10 @@ export default function HomeScreen() {
 
 function formatRelativeDays(
 	date: Date,
+	timezone: string,
 	t: (k: string, o?: any) => string,
 ): string {
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const days = Math.floor((Date.now() - date.getTime()) / msPerDay);
+	const days = daysBetween(date.getTime(), Date.now(), timezone);
 	if (days <= 0) return t("today");
 	return t("days_ago", { count: days });
 }
