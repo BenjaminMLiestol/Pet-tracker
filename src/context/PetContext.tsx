@@ -21,6 +21,7 @@ export type WalkRecord = { id: number; timestamp: number; walked: boolean };
 export type WeightRecord = { timestamp: number; weightKg: number };
 
 export type PetContextValue = {
+	petId: number | null;
 	name: string;
 	breed: string;
 	feedings: FeedingRecord[];
@@ -437,6 +438,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			: null;
 
 		return {
+			petId: pet?.id ?? null,
 			name: pet?.name ?? "",
 			breed: pet?.breed ?? "",
 			feedings,

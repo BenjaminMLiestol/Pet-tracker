@@ -14,6 +14,8 @@ import WalkScreen from './src/screens/WalkScreen';
 import { PetProvider, usePet } from './src/context/PetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { RemindersProvider } from './src/context/RemindersContext';
+import { CareProvider } from './src/context/CareContext';
+import CareScreen from './src/screens/CareScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import { useTranslation } from 'react-i18next';
@@ -71,6 +73,7 @@ function AppTabs() {
           route.name === 'Walk'    ? t('tabs_walk')   :
           route.name === 'Weight'  ? t('tabs_weight') :
           route.name === 'Bath'    ? t('tabs_bath')   :
+          route.name === 'Care'    ? t('tabs_care')   :
            t('tabs_profile'),
         tabBarIcon: ({ color, size, focused }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home-outline';
@@ -79,6 +82,7 @@ function AppTabs() {
           if (route.name === 'Walk') iconName = focused ? 'walk' : 'walk-outline';
           if (route.name === 'Weight') iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           if (route.name === 'Bath') iconName = focused ? 'water' : 'water-outline';
+          if (route.name === 'Care') iconName = focused ? 'medkit' : 'medkit-outline';
           if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -89,6 +93,7 @@ function AppTabs() {
       <Tab.Screen name="Walk" component={WalkScreen} />
       <Tab.Screen name="Weight" component={WeightScreen} />
       <Tab.Screen name="Bath" component={BathsScreen} />
+      <Tab.Screen name="Care" component={CareScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} /> 
     </Tab.Navigator>
   );
@@ -124,10 +129,12 @@ export default function App() {
     <AuthProvider>
       <PetProvider>
         <RemindersProvider>
-          <NavigationContainer theme={LightTheme}>
-            <StatusBar style="dark" />
-            <RootNavigator />
-          </NavigationContainer>
+          <CareProvider>
+            <NavigationContainer theme={LightTheme}>
+              <StatusBar style="dark" />
+              <RootNavigator />
+            </NavigationContainer>
+          </CareProvider>
         </RemindersProvider>
       </PetProvider>
     </AuthProvider>
