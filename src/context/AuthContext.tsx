@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch, registerUnauthorizedHandler } from '../api/client';
+import { clearUserCache } from '../api/userCache';
 import { clearToken, getToken, setToken as saveToken } from '../api/tokenStorage';
 
 type User = {
@@ -36,9 +37,10 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } catch {
       // ignore network errors on logout
     } finally {
-      await Promise.all([clearToken(), AsyncStorage.removeItem('authUser')]);
+      // Reset state first so nothing re-persists, then wipe the previous user's cached data.
       setToken(null);
       setUser(null);
+      await Promise.all([clearToken(), AsyncStorage.removeItem('authUser'), clearUserCache()]);
     }
   }, [token]);
 

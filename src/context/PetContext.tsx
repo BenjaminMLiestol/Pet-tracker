@@ -317,6 +317,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	// ---- Bootstrap: load from cache immediately, then refresh from API ----
 	useEffect(() => {
 		if (!token) {
+			setHasMore({ feedings: false, walks: false });
 			setPet(null);
 			setFeedings([]);
 			setBaths([]);
