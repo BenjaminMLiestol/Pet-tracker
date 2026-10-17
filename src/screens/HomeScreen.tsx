@@ -18,8 +18,8 @@ export default function HomeScreen() {
 	const DOG_IMG = require("../../assets/dog.png");
 
 	const {
-		hasFedToday,
-		hasWalkedToday,
+		feedingsToday,
+		walksToday,
 		lastBathAt,
 		currentWeightKg,
 		refresh,
@@ -66,11 +66,11 @@ export default function HomeScreen() {
 				<Text style={styles.cardTitle}>{t("today")}</Text>
 				<Text style={styles.row}>
 					<Text style={styles.label}>{t("fed")}: </Text>
-					{hasFedToday ? t("yes") : t("no")}
+					{feedingsToday > 0 ? t("times", { count: feedingsToday }) : t("no")}
 				</Text>
 				<Text style={styles.row}>
 					<Text style={styles.label}>{t("walked")}: </Text>
-					{hasWalkedToday ? t("yes") : t("no")}
+					{walksToday > 0 ? t("times", { count: walksToday }) : t("no")}
 				</Text>
 			</View>
 

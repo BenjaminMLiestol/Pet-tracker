@@ -31,9 +31,13 @@ export type PetContextValue = {
 	hasWalkedToday: boolean;
 	lastBathAt: Date | null;
 	currentWeightKg: number | null;
-	setFedToday: (fed: boolean) => Promise<void>;
+	feedingsToday: number;
+	walksToday: number;
+	addFeeding: () => Promise<void>;
+	removeFeeding: (id: number) => Promise<void>;
+	addWalk: () => Promise<void>;
+	removeWalk: (id: number) => Promise<void>;
 	setBathedToday: () => Promise<void>;
-	setWalkedToday: (walked: boolean) => Promise<void>;
 	nextBathDueAt: Date | null;
 	isBathDue: boolean;
 	bathOverdueDays: number;
@@ -298,57 +302,38 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	}, [token, fetchActivities]);
 
 	// ---- Mutations: API-first (keeps server as source of truth), cache persists via effect ----
-	const setFedToday = useCallback(
-		(fed: boolean) =>
+	const addFeeding = useCallback(
+		() =>
 			runMutation(async () => {
-			if (!pet) return;
-
-			const nowIso = new Date().toISOString();
-			const today = new Date();
-
-			const todays = feedings
-				.filter((f) => isSameDay(new Date(f.timestamp), today))
-				.sort((a, b) => b.timestamp - a.timestamp);
-			const latestToday = todays[0];
-
-			if (fed) {
-				if (latestToday) {
-					await apiFetch(`/feedings/${latestToday.id}`, {
-						method: "PATCH",
-						body: { feed_check: true, fed_at: nowIso },
-					});
-					setFeedings((prev) =>
-						prev.map((f) =>
-							f.id === latestToday.id
-								? { ...f, fed: true, timestamp: Date.parse(nowIso) }
-								: f,
-						),
-					);
-				} else {
-					const created = await apiFetch<{
-						id: number;
-						fed_at: string;
-						feed_check: boolean;
-					}>("/feedings", {
-						method: "POST",
-						body: { pet_id: pet.id, feed_check: true, fed_at: nowIso },
-					});
-					setFeedings((prev) => [
-						{
-							id: created.id,
-							fed: true,
-							timestamp: Date.parse(created.fed_at ?? nowIso),
-						},
-						...prev,
-					]);
-				}
-			} else {
-				if (!latestToday) return;
-				await apiFetch(`/feedings/${latestToday.id}`, { method: "DELETE" });
-				setFeedings((prev) => prev.filter((f) => f.id !== latestToday.id));
-			}
+				if (!pet) return;
+				const nowIso = new Date().toISOString();
+				const created = await apiFetch<{
+					id: number;
+					fed_at: string;
+					feed_check: boolean;
+				}>("/feedings", {
+					method: "POST",
+					body: { pet_id: pet.id, feed_check: true, fed_at: nowIso },
+				});
+				setFeedings((prev) => [
+					{
+						id: created.id,
+						fed: true,
+						timestamp: Date.parse(created.fed_at ?? nowIso),
+					},
+					...prev,
+				]);
 			}),
-		[pet, feedings, runMutation],
+		[pet, runMutation],
+	);
+
+	const removeFeeding = useCallback(
+		(id: number) =>
+			runMutation(async () => {
+				await apiFetch(`/feedings/${id}`, { method: "DELETE" });
+				setFeedings((prev) => prev.filter((f) => f.id !== id));
+			}),
+		[runMutation],
 	);
 
 	const setBathedToday = useCallback(
@@ -365,56 +350,38 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		[pet, runMutation],
 	);
 
-	const setWalkedToday = useCallback(
-		(walked: boolean) =>
+	const addWalk = useCallback(
+		() =>
 			runMutation(async () => {
-			if (!pet) return;
-			const nowIso = new Date().toISOString();
-			const today = new Date();
-
-			const todays = walks
-				.filter((w) => isSameDay(new Date(w.timestamp), today))
-				.sort((a, b) => b.timestamp - a.timestamp);
-			const latestToday = todays[0];
-
-			if (walked) {
-				if (latestToday) {
-					await apiFetch(`/walks/${latestToday.id}`, {
-						method: "PATCH",
-						body: { walk_check: true, walked_at: nowIso },
-					});
-					setWalks((prev) =>
-						prev.map((w) =>
-							w.id === latestToday.id
-								? { ...w, walked: true, timestamp: Date.parse(nowIso) }
-								: w,
-						),
-					);
-				} else {
-					const created = await apiFetch<{
-						id: number;
-						walked_at: string;
-						walk_check: boolean;
-					}>("/walks", {
-						method: "POST",
-						body: { pet_id: pet.id, walk_check: true, walked_at: nowIso },
-					});
-					setWalks((prev) => [
-						{
-							id: created.id,
-							walked: true,
-							timestamp: Date.parse(created.walked_at ?? nowIso),
-						},
-						...prev,
-					]);
-				}
-			} else {
-				if (!latestToday) return;
-				await apiFetch(`/walks/${latestToday.id}`, { method: "DELETE" });
-				setWalks((prev) => prev.filter((w) => w.id !== latestToday.id));
-			}
+				if (!pet) return;
+				const nowIso = new Date().toISOString();
+				const created = await apiFetch<{
+					id: number;
+					walked_at: string;
+					walk_check: boolean;
+				}>("/walks", {
+					method: "POST",
+					body: { pet_id: pet.id, walk_check: true, walked_at: nowIso },
+				});
+				setWalks((prev) => [
+					{
+						id: created.id,
+						walked: true,
+						timestamp: Date.parse(created.walked_at ?? nowIso),
+					},
+					...prev,
+				]);
 			}),
-		[pet, walks, runMutation],
+		[pet, runMutation],
+	);
+
+	const removeWalk = useCallback(
+		(id: number) =>
+			runMutation(async () => {
+				await apiFetch(`/walks/${id}`, { method: "DELETE" });
+				setWalks((prev) => prev.filter((w) => w.id !== id));
+			}),
+		[runMutation],
 	);
 
 	const setWeightToday = useCallback(
@@ -438,12 +405,14 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	const value = useMemo<PetContextValue>(() => {
 		const today = new Date();
 
-		const hasFedToday = feedings.some(
+		const feedingsToday = feedings.filter(
 			(f) => f.fed && isSameDay(new Date(f.timestamp), today),
-		);
-		const hasWalkedToday = walks.some(
+		).length;
+		const walksToday = walks.filter(
 			(w) => w.walked && isSameDay(new Date(w.timestamp), today),
-		);
+		).length;
+		const hasFedToday = feedingsToday > 0;
+		const hasWalkedToday = walksToday > 0;
 
 		const lastBathTs = getLatestTimestamp(baths);
 		const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
@@ -478,9 +447,13 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			hasWalkedToday,
 			lastBathAt,
 			currentWeightKg,
-			setFedToday,
+			feedingsToday,
+			walksToday,
+			addFeeding,
+			removeFeeding,
+			addWalk,
+			removeWalk,
 			setBathedToday,
-			setWalkedToday,
 			nextBathDueAt,
 			isBathDue,
 			bathOverdueDays,
@@ -497,9 +470,11 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		feedings,
 		walks,
 		weights,
-		setFedToday,
+		addFeeding,
+		removeFeeding,
+		addWalk,
+		removeWalk,
 		setBathedToday,
-		setWalkedToday,
 		setWeightToday,
 		busy,
 		refresh,
