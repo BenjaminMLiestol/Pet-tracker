@@ -13,7 +13,7 @@ import i18n from "../i18n";
 import { describeError } from "../api/errors";
 import { calendarDay, deviceTimeZone, isSameDay } from "../utils/dates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiFetch } from "../api/client";
+import { apiDelete, apiFetch } from "../api/client";
 import { useAuth } from "./AuthContext";
 
 // ===== Types expected by the rest of the app =====
@@ -417,7 +417,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	const removeFeeding = useCallback(
 		(id: number) =>
 			runMutation(async () => {
-				await apiFetch(`/feedings/${id}`, { method: "DELETE" });
+				await apiDelete(`/feedings/${id}`);
 				setFeedings((prev) => prev.filter((f) => f.id !== id));
 			}, { silent: true }),
 		[runMutation],
@@ -465,7 +465,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	const removeWalk = useCallback(
 		(id: number) =>
 			runMutation(async () => {
-				await apiFetch(`/walks/${id}`, { method: "DELETE" });
+				await apiDelete(`/walks/${id}`);
 				setWalks((prev) => prev.filter((w) => w.id !== id));
 			}, { silent: true }),
 		[runMutation],

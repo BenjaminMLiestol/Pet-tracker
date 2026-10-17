@@ -12,7 +12,7 @@ import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import i18n from "../i18n";
 import { describeError } from "../api/errors";
-import { apiFetch } from "../api/client";
+import { apiDelete, apiFetch } from "../api/client";
 import { useAuth } from "./AuthContext";
 import { usePet } from "./PetContext";
 
@@ -259,7 +259,7 @@ export function CareProvider({ children }: { children: ReactNode }) {
 		(kind: CareKind, id: number) =>
 			run(
 				async () => {
-					await apiFetch(`${ENDPOINT[kind]}/${id}`, { method: "DELETE" });
+					await apiDelete(`${ENDPOINT[kind]}/${id}`);
 					setRecords((prev) => ({
 						...prev,
 						[kind]: prev[kind].filter((r) => r.id !== id),

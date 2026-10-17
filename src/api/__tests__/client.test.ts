@@ -1,4 +1,4 @@
-import { ApiError, apiFetch, registerUnauthorizedHandler } from "../client";
+import { ApiError, apiDelete, apiFetch, registerUnauthorizedHandler } from "../client";
 
 jest.mock("../tokenStorage", () => ({ getToken: jest.fn(async () => "tok-123") }));
 
@@ -86,5 +86,33 @@ describe("apiFetch", () => {
 		const err = (await apiFetch("/feedings", { method: "POST", body: {} }).catch((e) => e)) as ApiError;
 		expect(err).toBeInstanceOf(ApiError);
 		expect(err.kind).toBe("timeout");
+	});
+});
+
+describe("apiDelete", () => {
+	it("sends DELETE and resolves on success", async () => {
+		fetchMock.mockResolvedValue(json(204, {}));
+		await expect(apiDelete("/feedings/5")).resolves.toBeUndefined();
+		expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
+	});
+
+	it("treats 404 (already deleted) as success", async () => {
+		fetchMock.mockResolvedValue(json(404, { message: "Not found" }));
+		await expect(apiDelete("/feedings/5")).resolves.toBeUndefined();
+	});
+
+	it("still fails for server errors and network problems", async () => {
+		fetchMock.mockResolvedValue(json(500, { message: "boom" }));
+		await expect(apiDelete("/feedings/5")).rejects.toMatchObject({ status: 500 });
+
+		fetchMock.mockReset();
+		fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+		await expect(apiDelete("/feedings/5")).rejects.toMatchObject({ kind: "network" });
+	});
+
+	it("does not retry (writes are never retried)", async () => {
+		fetchMock.mockResolvedValue(json(500, {}));
+		await expect(apiDelete("/walks/1")).rejects.toBeDefined();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 });

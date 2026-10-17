@@ -109,3 +109,14 @@ export async function apiFetch<T = unknown>(
   if (ct && ct.includes('application/json')) return (await res.json()) as T;
   return undefined as T;
 }
+
+// DELETE is idempotent: a 404 means the thing is already gone (for example a co-owner
+// deleted it first), which is the outcome the caller wanted, so it counts as success.
+export async function apiDelete(path: string): Promise<void> {
+  try {
+    await apiFetch(path, { method: 'DELETE' });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return;
+    throw e;
+  }
+}
