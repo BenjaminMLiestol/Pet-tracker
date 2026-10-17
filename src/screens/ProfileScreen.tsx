@@ -4,10 +4,13 @@ import {
 	Text,
 	StyleSheet,
 	ScrollView,
+	Switch,
+	Alert,
 	RefreshControl,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { usePet } from "../context/PetContext";
+import { useReminders } from "../context/RemindersContext";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
@@ -24,6 +27,12 @@ export default function ProfileScreen() {
 		refreshing,
 	} = usePet();
 	const isFocused = useIsFocused();
+	const { enabled: remindersOn, setEnabled: setRemindersOn } = useReminders();
+
+	const onToggleReminders = async (next: boolean) => {
+		const ok = await setRemindersOn(next);
+		if (!ok) Alert.alert(t("reminders"), t("reminders_permission_denied"));
+	};
 
 	const fullName = user
 		? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
@@ -83,6 +92,15 @@ export default function ProfileScreen() {
 			</View>
 
 			<View style={styles.card}>
+				<Text style={styles.cardTitle}>{t("reminders")}</Text>
+				<View style={styles.switchRow}>
+					<Text style={styles.switchLabel}>{t("reminders_enable")}</Text>
+					<Switch value={remindersOn} onValueChange={onToggleReminders} />
+				</View>
+				<Text style={styles.hint}>{t("reminders_hint")}</Text>
+			</View>
+
+			<View style={styles.card}>
 				<Text style={styles.cardTitle}>{t("language")}</Text>
 				<LanguageSwitcher />
 			</View>
@@ -106,4 +124,11 @@ const styles = StyleSheet.create({
 	cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
 	row: { fontSize: 16, marginBottom: 6 },
 	label: { color: "#374151", fontWeight: "600" },
+	switchRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+	},
+	switchLabel: { fontSize: 16, flex: 1, marginRight: 12 },
+	hint: { color: "#6b7280", marginTop: 8 },
 });

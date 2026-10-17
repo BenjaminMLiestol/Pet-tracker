@@ -13,6 +13,7 @@ import BathsScreen from './src/screens/BathsScreen';
 import WalkScreen from './src/screens/WalkScreen';
 import { PetProvider, usePet } from './src/context/PetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { RemindersProvider } from './src/context/RemindersContext';
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import { useTranslation } from 'react-i18next';
@@ -122,10 +123,12 @@ export default function App() {
   return (
     <AuthProvider>
       <PetProvider>
-        <NavigationContainer theme={LightTheme}>
-          <StatusBar style="dark" />
-          <RootNavigator />
-        </NavigationContainer>
+        <RemindersProvider>
+          <NavigationContainer theme={LightTheme}>
+            <StatusBar style="dark" />
+            <RootNavigator />
+          </NavigationContainer>
+        </RemindersProvider>
       </PetProvider>
     </AuthProvider>
   );
