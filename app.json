@@ -35,7 +35,8 @@
     },
     "plugins": [
       "expo-secure-store",
-      "./plugins/withoutPushEntitlement"
+      "./plugins/withoutPushEntitlement",
+      "./plugins/withPodsMinDeployment"
     ]
   }
 }
