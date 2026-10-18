@@ -1,0 +1,19 @@
+# The vet summary opens the share sheet with a named PDF.
+appId: com.benjaminliestol.pettracker
+---
+- launchApp
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-profile"
+      EXPECT: "Konto|Account"
+- scrollUntilVisible:
+    element: "Veterinæroppsummering \\(PDF\\)|Vet summary \\(PDF\\)"
+    direction: DOWN
+- tapOn: "Veterinæroppsummering \\(PDF\\)|Vet summary \\(PDF\\)"
+- extendedWaitUntil:
+    visible: "e2e-dog-vet-summary-.*"
+    timeout: 20000
+# Close the share sheet again.
+- tapOn: "Lukk|Close"
+- assertVisible: "Veterinæroppsummering \\(PDF\\)|Vet summary \\(PDF\\)"

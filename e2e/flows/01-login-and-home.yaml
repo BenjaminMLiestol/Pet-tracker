@@ -1,0 +1,42 @@
+# Sign in with the throwaway test account and check Home shows the new dog with the default
+# goals (1 feeding, 2 walks). Texts are matched in Norwegian and English.
+appId: com.benjaminliestol.pettracker
+---
+- launchApp
+# Someone may be signed in from before (a person, or a test run whose account is gone by now and
+# which the app signs out by itself a moment later). Sign out if we still can, then wait for the
+# login screen whichever way it arrives.
+- runFlow:
+    when:
+      visible:
+        id: "tab-home"
+    commands:
+      - tapOn:
+          id: "tab-profile"
+          optional: true
+      - scrollUntilVisible:
+          element: "Logg ut|Log out"
+          direction: DOWN
+          optional: true
+      - tapOn:
+          text: "Logg ut|Log out"
+          optional: true
+- extendedWaitUntil:
+    visible: "Velkommen tilbake|Welcome back"
+    timeout: 20000
+- tapOn:
+    id: "email"
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: "password"
+- inputText: ${E2E_PASSWORD}
+- tapOn: "Logg inn|Log in"
+# Decline the Face ID offer: nothing about the test account may be saved on the phone.
+- runFlow:
+    when:
+      visible: "Ikke nå|Not now"
+    commands:
+      - tapOn: "Ikke nå|Not now"
+- assertVisible: ".*E2E Dog.*"
+- assertVisible: ".*: 0 / 1"
+- assertVisible: ".*: 0 / 2"

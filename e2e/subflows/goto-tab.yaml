@@ -1,0 +1,13 @@
+# Opens a tab and waits for something only that screen shows. Retries: a tap right after sign-in
+# or a screen change can be ignored while the app is still settling.
+# Needs the variables TAB (the tab's test id) and EXPECT (a text on the screen).
+appId: com.benjaminliestol.pettracker
+---
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: ${TAB}
+      - extendedWaitUntil:
+          visible: ${EXPECT}
+          timeout: 4000

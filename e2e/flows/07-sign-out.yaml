@@ -1,0 +1,14 @@
+# Sign out ends on the login screen.
+appId: com.benjaminliestol.pettracker
+---
+- launchApp
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-profile"
+      EXPECT: "Konto|Account"
+- scrollUntilVisible:
+    element: "Logg ut|Log out"
+    direction: DOWN
+- tapOn: "Logg ut|Log out"
+- assertVisible: "Velkommen tilbake|Welcome back"

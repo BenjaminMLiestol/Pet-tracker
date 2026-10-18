@@ -92,6 +92,8 @@ function AppTabs() {
         headerShown: false,
         sceneStyle: { backgroundColor: c.bg },
         tabBarHideOnKeyboard: true,
+        // A fixed id per tab, so the end-to-end tests don't depend on the language.
+        tabBarButtonTestID: `tab-${route.name.toLowerCase()}`,
         tabBarActiveTintColor: c.text,
         tabBarInactiveTintColor: c.textMuted,
         tabBarStyle: {

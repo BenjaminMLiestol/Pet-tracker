@@ -139,6 +139,13 @@ export default function HomeScreen() {
 					/>
 					<PressRow
 						title={t("food_title")}
+						accessibilityLabel={`${t("food_title")}: ${
+							supply
+								? supply.status === "out"
+									? t("food_out")
+									: t("food_days_left", { count: supply.daysLeft })
+								: t("food_setup")
+						}`}
 						right={
 							<View style={styles.foodRight}>
 								<Text
@@ -204,7 +211,7 @@ function StatTile({
 		<PressScale
 			onPress={onPress}
 			style={styles.tileWrap}
-			accessibilityLabel={`${label}: ${value} / ${goal}`}
+			accessibilityLabel={`${label}: ${value} / ${goal}${value >= goal ? `, ${t("goal_reached")}` : ""}`}
 		>
 			<Surface style={styles.tile}>
 				<View style={styles.statRow}>

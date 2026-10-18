@@ -1,0 +1,14 @@
+# Set up a bag of food: 12 kg at 300 g a day is 40 days.
+appId: com.benjaminliestol.pettracker
+---
+- launchApp
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-home"
+      EXPECT: ".*: [0-9]+ / [0-9]+.*"
+- tapOn: "Hundemat.*|Dog food.*"
+- tapOn: "Start sekken i dag|Start the bag today"
+- assertVisible: "40 dager igjen|40 days left"
+- tapOn: "Lukk|Close"
+- assertVisible: "Hundemat: 40 dager igjen|Dog food: 40 days left"

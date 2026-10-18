@@ -1,0 +1,24 @@
+# The daily goal is a shared setting: raising it in Profile changes Home to x/3.
+appId: com.benjaminliestol.pettracker
+---
+- launchApp
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-profile"
+      EXPECT: "Konto|Account"
+- scrollUntilVisible:
+    element: "Turer per dag|Walks per day"
+    direction: DOWN
+- tapOn:
+    id: "goal-walks-more"
+# The setting saves a moment after the last tap, then a toast confirms it.
+- extendedWaitUntil:
+    visible: ".*Lagret.*|.*Saved.*"
+    timeout: 10000
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-home"
+      EXPECT: ".*: [0-9]+ / [0-9]+.*"
+- assertVisible: ".*: [0-9] / 3"

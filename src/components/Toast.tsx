@@ -84,11 +84,14 @@ function ToastHost({ toast, onPress }: { toast: ToastData | null; onPress: () =>
 						accessibilityRole="alert"
 						accessibilityLiveRegion="polite"
 					>
-						<Ionicons
-							name={toast.kind === "success" ? "checkmark-circle" : "alert-circle"}
-							size={20}
-							color={toast.kind === "success" ? c.successOnInverse : c.dangerOnInverse}
-						/>
+						{/* Decorative: without this VoiceOver reads the icon's glyph character aloud. */}
+						<View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+							<Ionicons
+								name={toast.kind === "success" ? "checkmark-circle" : "alert-circle"}
+								size={20}
+								color={toast.kind === "success" ? c.successOnInverse : c.dangerOnInverse}
+							/>
+						</View>
 						<Text variant="sub" style={[styles.message, { color: c.bg }]}>
 							{toast.message}
 						</Text>

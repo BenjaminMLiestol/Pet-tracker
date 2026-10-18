@@ -1,0 +1,16 @@
+# Deleting an entry shows a toast with Undo, and Undo brings the entry back.
+appId: com.benjaminliestol.pettracker
+---
+- launchApp
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-walk"
+      EXPECT: "Logg tur|Log a walk"
+- tapOn:
+    text: "Slett|Delete"
+    index: 0
+- assertVisible: ".*Slettet.*|.*Deleted.*"
+- tapOn: "Angre|Undo"
+# Back to two walks, so the goal is reached again.
+- assertVisible: "Målet er nådd|Goal reached"

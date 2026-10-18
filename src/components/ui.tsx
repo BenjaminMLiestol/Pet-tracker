@@ -235,6 +235,9 @@ type StepperProps = {
 	format: (value: number) => string;
 	decrementLabel: string;
 	incrementLabel: string;
+	// Ids for the end-to-end tests: `${testID}-less` and `${testID}-more` (the buttons are
+	// hidden from accessibility on purpose, the whole stepper is one adjustable control).
+	testID?: string;
 };
 
 const HOLD_DELAY_MS = 400; // before a held button starts repeating
@@ -251,6 +254,7 @@ export function Stepper({
 	format,
 	decrementLabel,
 	incrementLabel,
+	testID,
 }: StepperProps) {
 	const c = useTheme();
 	const current = useRef(value);
@@ -309,6 +313,7 @@ export function Stepper({
 			]}
 			accessible={false}
 			importantForAccessibility="no"
+			testID={testID ? `${testID}-${direction === 1 ? "more" : "less"}` : undefined}
 		>
 			<Ionicons name={direction === 1 ? "add" : "remove"} size={20} color={c.text} />
 		</Pressable>

@@ -1,0 +1,13 @@
+# Run in this order: the first flow signs in, the later ones continue from that session.
+flows:
+  - flows/*.yaml
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 01-login-and-home
+    - 02-log-walks-and-goal
+    - 03-delete-and-undo
+    - 04-change-goal
+    - 05-dog-food
+    - 06-export-pdf
+    - 07-sign-out

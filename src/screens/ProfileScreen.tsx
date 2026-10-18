@@ -346,6 +346,7 @@ export default function ProfileScreen() {
 								}}
 								format={(n) => t("times", { count: n })}
 								decrementLabel={t("goals_walks_less")}
+								testID="goal-walks"
 								incrementLabel={t("goals_walks_more")}
 							/>
 						}
