@@ -44,6 +44,9 @@ export default function ProfileScreen() {
 		lastBathAt,
 		bathIntervalDays,
 		setBathInterval,
+		feedingsPerDay,
+		walksPerDay,
+		setDailyGoal,
 		petId,
 		pets,
 		owners,
@@ -85,6 +88,18 @@ export default function ProfileScreen() {
 		setDays(next);
 		saveDays(next);
 	};
+
+	// Daily goals (shared like the bath interval): how many feedings and walks count as done.
+	const [feedGoal, setFeedGoal] = useState(feedingsPerDay);
+	const [walkGoal, setWalkGoal] = useState(walksPerDay);
+	useEffect(() => setFeedGoal(feedingsPerDay), [feedingsPerDay]);
+	useEffect(() => setWalkGoal(walksPerDay), [walksPerDay]);
+	const saveFeedGoal = useDebouncedCommit(async (next: number) => {
+		if (next !== feedingsPerDay) report(await setDailyGoal("feedings", next));
+	});
+	const saveWalkGoal = useDebouncedCommit(async (next: number) => {
+		if (next !== walksPerDay) report(await setDailyGoal("walks", next));
+	});
 
 	// Reminder times (personal). Held as "HH:MM" while editing.
 	const saved = reminderTimes(user);
@@ -255,6 +270,48 @@ export default function ProfileScreen() {
 				</Group>
 				<Text variant="caption" tone="muted" style={styles.hint}>
 					{t("bath_interval_hint")}
+				</Text>
+			</Section>
+
+			<Section label={t("goals_section")}>
+				<Group>
+					<Row
+						title={t("goals_feedings")}
+						right={
+							<Stepper
+								value={feedGoal}
+								min={1}
+								max={10}
+								onChange={(n) => {
+									setFeedGoal(n);
+									saveFeedGoal(n);
+								}}
+								format={(n) => t("times", { count: n })}
+								decrementLabel={t("goals_feedings_less")}
+								incrementLabel={t("goals_feedings_more")}
+							/>
+						}
+					/>
+					<Row
+						title={t("goals_walks")}
+						right={
+							<Stepper
+								value={walkGoal}
+								min={1}
+								max={10}
+								onChange={(n) => {
+									setWalkGoal(n);
+									saveWalkGoal(n);
+								}}
+								format={(n) => t("times", { count: n })}
+								decrementLabel={t("goals_walks_less")}
+								incrementLabel={t("goals_walks_more")}
+							/>
+						}
+					/>
+				</Group>
+				<Text variant="caption" tone="muted" style={styles.hint}>
+					{t("goals_hint")}
 				</Text>
 			</Section>
 

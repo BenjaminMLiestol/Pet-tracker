@@ -51,3 +51,14 @@ export function planDailyReminders({
 		.filter((r) => r.at.getTime() > now.getTime())
 		.sort((a, b) => a.at.getTime() - b.at.getTime());
 }
+
+/** Some of today's goal is done but not all of it: "1 of 2 walks" rather than "no walk yet". */
+export function isPartial(count: number, goal: number): boolean {
+	return goal > 1 && count > 0 && count < goal;
+}
+
+export function isSameCalendarDay(a: Date, b: Date): boolean {
+	return (
+		a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+	);
+}

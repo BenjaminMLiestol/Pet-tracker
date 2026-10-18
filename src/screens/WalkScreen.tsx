@@ -5,7 +5,7 @@ import ActivityLogScreen from "../components/ActivityLogScreen";
 
 export default function WalkScreen() {
 	const { t } = useTranslation();
-	const { walks, walksToday, addWalk, updateWalk, removeWalk, loadMore, loadingMore } =
+	const { walks, walksToday, walksPerDay, addWalk, updateWalk, removeWalk, loadMore, loadingMore } =
 		usePet();
 
 	return (
@@ -15,6 +15,7 @@ export default function WalkScreen() {
 			logButtonLabel={t("log_walk")}
 			entries={walks.filter((w) => w.walked)}
 			countToday={walksToday}
+			goal={walksPerDay}
 			onAdd={addWalk}
 			onUpdate={updateWalk}
 			onRemove={removeWalk}

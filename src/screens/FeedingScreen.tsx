@@ -5,7 +5,7 @@ import ActivityLogScreen from "../components/ActivityLogScreen";
 
 export default function FeedingScreen() {
 	const { t } = useTranslation();
-	const { feedings, feedingsToday, addFeeding, updateFeeding, removeFeeding, loadMore, loadingMore } =
+	const { feedings, feedingsToday, feedingsPerDay, addFeeding, updateFeeding, removeFeeding, loadMore, loadingMore } =
 		usePet();
 
 	return (
@@ -15,6 +15,7 @@ export default function FeedingScreen() {
 			logButtonLabel={t("log_feeding")}
 			entries={feedings.filter((f) => f.fed)}
 			countToday={feedingsToday}
+			goal={feedingsPerDay}
 			onAdd={addFeeding}
 			onUpdate={updateFeeding}
 			onRemove={removeFeeding}

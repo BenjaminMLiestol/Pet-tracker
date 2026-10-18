@@ -15,7 +15,7 @@ import { usePet } from "./PetContext";
 import { useCare } from "./CareContext";
 import { planCareReminders, type CareDue } from "../utils/careReminders";
 import { reminderTimes, useAuth } from "./AuthContext";
-import { parseTime, planDailyReminders } from "../utils/reminders";
+import { isPartial, isSameCalendarDay, parseTime, planDailyReminders } from "../utils/reminders";
 
 const STORAGE_KEY = "app/reminders-enabled";
 const CHANNEL_ID = "reminders";
@@ -70,7 +70,18 @@ function at(base: Date, dayOffset: number, hour: number): Date {
 export function RemindersProvider({ children }: { children: ReactNode }) {
 	const { t, i18n } = useTranslation();
 	const { token, user } = useAuth();
-	const { name, hasFedToday, hasWalkedToday, weights, sync, timezone } = usePet();
+	const {
+		name,
+		hasFedToday,
+		hasWalkedToday,
+		feedingsToday,
+		walksToday,
+		feedingsPerDay,
+		walksPerDay,
+		weights,
+		sync,
+		timezone,
+	} = usePet();
 	const { records: care } = useCare();
 	const { feeding: feedingTime, walk: walkTime } = reminderTimes(user);
 	const [enabled, setEnabledState] = useState(false);
@@ -142,10 +153,18 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 				walkedToday: hasWalkedToday,
 			});
 			for (const reminder of planned) {
+				const feeding = reminder.kind === "feeding";
+				const count = feeding ? feedingsToday : walksToday;
+				const goal = feeding ? feedingsPerDay : walksPerDay;
+				// Only today's reminder can say how far along the day is; later ones are rebuilt
+				// when the app opens.
+				const partial = isSameCalendarDay(reminder.at, now) && isPartial(count, goal);
 				await schedule(
 					reminder.at,
-					t(reminder.kind === "feeding" ? "reminder_feeding_title" : "reminder_walk_title"),
-					t(reminder.kind === "feeding" ? "reminder_feeding_body" : "reminder_walk_body", { name }),
+					t(feeding ? "reminder_feeding_title" : "reminder_walk_title"),
+					partial
+						? t(feeding ? "reminder_feeding_progress" : "reminder_walk_progress", { name, count, goal })
+						: t(feeding ? "reminder_feeding_body" : "reminder_walk_body", { name }),
 				);
 			}
 
@@ -201,6 +220,10 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		name,
 		hasFedToday,
 		hasWalkedToday,
+		feedingsToday,
+		walksToday,
+		feedingsPerDay,
+		walksPerDay,
 		lastWeightAt,
 		care,
 		timezone,

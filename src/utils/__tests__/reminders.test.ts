@@ -1,4 +1,11 @@
-import { formatTime, parseTime, planDailyReminders, timeToDate } from "../reminders";
+import {
+	formatTime,
+	isPartial,
+	isSameCalendarDay,
+	parseTime,
+	planDailyReminders,
+	timeToDate,
+} from "../reminders";
 
 const feeding = { hour: 18, minute: 0 };
 const walk = { hour: 19, minute: 30 };
@@ -76,5 +83,29 @@ describe("planDailyReminders", () => {
 	it("never schedules in the past, even at the exact minute", () => {
 		const plan = planDailyReminders({ ...base, now: at("2026-10-17T18:00:00") });
 		expect(plan.every((r) => r.at.getTime() > at("2026-10-17T18:00:00").getTime())).toBe(true);
+	});
+});
+
+describe("daily goals", () => {
+	it("is partial only when some, but not all, of a goal above one is done", () => {
+		expect(isPartial(0, 2)).toBe(false); // nothing yet: the plain wording fits
+		expect(isPartial(1, 2)).toBe(true);
+		expect(isPartial(2, 2)).toBe(false); // goal reached: no reminder at all
+		expect(isPartial(1, 1)).toBe(false);
+		expect(isPartial(3, 4)).toBe(true);
+	});
+
+	it("keeps today's reminder until the goal is reached, not until the first entry", () => {
+		const now = at("2026-10-20T10:00:00");
+		// The caller passes `count >= goal`: one of two walks is not done yet.
+		const oneOfTwo = planDailyReminders({ ...base, now, walkedToday: 1 >= 2 });
+		expect(oneOfTwo.filter((r) => r.kind === "walk" && isSameCalendarDay(r.at, now))).toHaveLength(1);
+		const twoOfTwo = planDailyReminders({ ...base, now, walkedToday: 2 >= 2 });
+		expect(twoOfTwo.filter((r) => r.kind === "walk" && isSameCalendarDay(r.at, now))).toHaveLength(0);
+	});
+
+	it("compares calendar days, not instants", () => {
+		expect(isSameCalendarDay(at("2026-10-20T00:01:00"), at("2026-10-20T23:59:00"))).toBe(true);
+		expect(isSameCalendarDay(at("2026-10-20T23:59:00"), at("2026-10-21T00:01:00"))).toBe(false);
 	});
 });

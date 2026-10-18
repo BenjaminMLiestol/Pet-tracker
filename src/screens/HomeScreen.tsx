@@ -28,6 +28,8 @@ export default function HomeScreen() {
 		breed,
 		feedingsToday,
 		walksToday,
+		feedingsPerDay,
+		walksPerDay,
 		lastBathAt,
 		currentWeightKg,
 		timezone,
@@ -93,11 +95,13 @@ export default function HomeScreen() {
 				<View style={styles.tiles}>
 					<StatTile
 						value={feedingsToday}
+						goal={feedingsPerDay}
 						label={t("fed")}
 						onPress={() => navigation.navigate("Feeding")}
 					/>
 					<StatTile
 						value={walksToday}
+						goal={walksPerDay}
 						label={t("walked")}
 						onPress={() => navigation.navigate("Walk")}
 					/>
@@ -138,19 +142,44 @@ export default function HomeScreen() {
 }
 
 // A count is the whole point of this tile, so it is the biggest thing on the page.
-function StatTile({ value, label, onPress }: { value: number; label: string; onPress: () => void }) {
+function StatTile({
+	value,
+	goal,
+	label,
+	onPress,
+}: {
+	value: number;
+	goal: number;
+	label: string;
+	onPress: () => void;
+}) {
 	const c = useTheme();
+	const { t } = useTranslation();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	return (
 		<PressScale
 			onPress={onPress}
 			style={styles.tileWrap}
-			accessibilityLabel={`${label}: ${value}`}
+			accessibilityLabel={`${label}: ${value} / ${goal}`}
 		>
 			<Surface style={styles.tile}>
-				<Text variant="stat" style={value === 0 ? styles.statZero : undefined}>
-					{value}
-				</Text>
+				<View style={styles.statRow}>
+					<Text variant="stat" style={value === 0 ? styles.statZero : undefined}>
+						{value}
+					</Text>
+					<Text variant="title" tone="muted" style={styles.goal}>
+						/{goal}
+					</Text>
+					{value >= goal && (
+						<Ionicons
+							name="checkmark-circle"
+							size={22}
+							color={c.success}
+							style={styles.goalDone}
+							accessibilityLabel={t("goal_reached")}
+						/>
+					)}
+				</View>
 				<Text variant="sub" tone="muted">
 					{label}
 				</Text>
@@ -188,5 +217,8 @@ const makeStyles = (c: Colors & { isDark: boolean }) =>
 			gap: space[1],
 		},
 		statZero: { color: c.textMuted },
+		statRow: { flexDirection: "row", alignItems: "baseline" },
+		goal: { marginLeft: space[1], fontVariant: ["tabular-nums"] },
+		goalDone: { marginLeft: space[2], alignSelf: "center" },
 		value: { textAlign: "right", flexShrink: 1, fontVariant: ["tabular-nums"] },
 	});

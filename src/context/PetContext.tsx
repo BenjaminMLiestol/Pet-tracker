@@ -60,6 +60,7 @@ export type PetContextValue = {
 	baths: BathRecord[];
 	walks: WalkRecord[];
 	weights: WeightRecord[];
+	// True once today's goal is reached (not just one logged).
 	hasFedToday: boolean;
 	hasWalkedToday: boolean;
 	lastBathAt: Date | null;
@@ -81,6 +82,10 @@ export type PetContextValue = {
 	// Days between baths (shared by everyone who owns the pet; default 30).
 	bathIntervalDays: number;
 	setBathInterval: (days: number) => Promise<boolean>;
+	// Daily goals (shared by everyone who owns the dog): feedings 1, walks 2 by default.
+	feedingsPerDay: number;
+	walksPerDay: number;
+	setDailyGoal: (kind: GoalKind, perDay: number) => Promise<boolean>;
 	nextBathDueAt: Date | null;
 	isBathDue: boolean;
 	bathOverdueDays: number;
@@ -112,6 +117,10 @@ export type PagedKind = "feedings" | "walks";
 const PetContext = createContext<PetContextValue | undefined>(undefined);
 
 export const DEFAULT_BATH_INTERVAL_DAYS = 30;
+// How many a day counts as done, until the owners set their own.
+export const DEFAULT_FEEDINGS_PER_DAY = 1;
+export const DEFAULT_WALKS_PER_DAY = 2;
+export type GoalKind = "feedings" | "walks";
 
 // ===== Backend API shapes =====
 type ApiPet = {
@@ -121,6 +130,8 @@ type ApiPet = {
 	breed?: string | null;
 	timezone?: string | null;
 	bath_interval_days?: number | null;
+	feedings_per_day?: number | null;
+	walks_per_day?: number | null;
 	date_of_birth?: string | null;
 	// Everyone who looks after the dog (names only; emails stay private).
 	users?: DogOwner[];
@@ -799,6 +810,29 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		[pet],
 	);
 
+	// Same as the bath interval: optimistic, rolled back if the server refuses.
+	const setDailyGoal = useCallback(
+		async (kind: GoalKind, perDay: number): Promise<boolean> => {
+			if (!pet) return false;
+			const field = kind === "feedings" ? "feedings_per_day" : "walks_per_day";
+			const previous =
+				pet[field] ?? (kind === "feedings" ? DEFAULT_FEEDINGS_PER_DAY : DEFAULT_WALKS_PER_DAY);
+			setPet((p) => (p ? { ...p, [field]: perDay } : p));
+			try {
+				const saved = await apiFetch<ApiPet>(`/pets/${pet.id}`, {
+					method: "PATCH",
+					body: { [field]: perDay },
+				});
+				setPet((p) => (p && p.id === saved.id ? { ...p, ...saved } : p));
+				return true;
+			} catch {
+				setPet((p) => (p && p.id === pet.id ? { ...p, [field]: previous } : p));
+				return false;
+			}
+		},
+		[pet],
+	);
+
 	// ---- Refresh: this dog's data and the dog list (co-owners, shared settings) ----
 	const refresh = useCallback(async () => {
 		if (!pet?.id) return;
@@ -911,8 +945,11 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		const walksToday = allWalks.filter(
 			(w) => w.walked && isSameDay(w.timestamp, today.getTime(), timezone),
 		).length;
-		const hasFedToday = feedingsToday > 0;
-		const hasWalkedToday = walksToday > 0;
+		const feedingsPerDay = pet?.feedings_per_day ?? DEFAULT_FEEDINGS_PER_DAY;
+		const walksPerDay = pet?.walks_per_day ?? DEFAULT_WALKS_PER_DAY;
+		// Done for the day means the goal is reached, not just one logged.
+		const hasFedToday = feedingsToday >= feedingsPerDay;
+		const hasWalkedToday = walksToday >= walksPerDay;
 
 		const lastBathTs = getLatestTimestamp(allBaths);
 		const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
@@ -971,6 +1008,9 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			removeBath,
 			bathIntervalDays,
 			setBathInterval,
+			feedingsPerDay,
+			walksPerDay,
+			setDailyGoal,
 			nextBathDueAt,
 			isBathDue,
 			bathOverdueDays,
@@ -1017,6 +1057,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		updateBath,
 		removeBath,
 		setBathInterval,
+		setDailyGoal,
 		setWeightToday,
 		updateWeight,
 		removeWeight,

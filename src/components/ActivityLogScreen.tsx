@@ -28,6 +28,8 @@ type Props = {
 	logButtonLabel: string;
 	entries: Entry[];
 	countToday: number;
+	// How many a day counts as done; shown next to the count.
+	goal: number;
 	// `at` backdates a new entry; omitted means now.
 	onAdd: (at?: Date) => Promise<boolean>;
 	onUpdate: (id: number, at: Date) => Promise<boolean>;
@@ -44,6 +46,7 @@ export default function ActivityLogScreen({
 	logButtonLabel,
 	entries,
 	countToday,
+	goal,
 	onAdd,
 	onUpdate,
 	onRemove,
@@ -116,10 +119,24 @@ export default function ActivityLogScreen({
 
 					{/* The count is the point of this page, so it is the biggest thing on it. */}
 					<Surface style={styles.summary}>
-						<TickText
-							value={String(countToday)}
-							style={[type.stat, countToday === 0 && { color: c.textMuted }]}
-						/>
+						<View style={styles.countRow}>
+							<TickText
+								value={String(countToday)}
+								style={[type.stat, countToday === 0 && { color: c.textMuted }]}
+							/>
+							<Text variant="title" tone="muted" style={styles.goal}>
+								/{goal}
+							</Text>
+							{countToday >= goal && (
+								<Ionicons
+									name="checkmark-circle"
+									size={24}
+									color={c.success}
+									style={styles.goalDone}
+									accessibilityLabel={t("goal_reached")}
+								/>
+							)}
+						</View>
 						<Text variant="sub" tone="muted" style={styles.summaryLabel}>
 							{name ? `${name} · ${todayLabel}` : todayLabel}
 						</Text>
@@ -216,6 +233,9 @@ const makeStyles = (c: Colors) =>
 		title: { marginBottom: space[5] },
 
 		summary: { padding: space[5], gap: space[1], marginBottom: space[6] },
+		countRow: { flexDirection: "row", alignItems: "baseline" },
+		goal: { marginLeft: space[1], fontVariant: ["tabular-nums"] },
+		goalDone: { marginLeft: space[2], alignSelf: "center" },
 		summaryLabel: { marginBottom: space[4] },
 		sectionLabel: { marginBottom: 0 },
 
