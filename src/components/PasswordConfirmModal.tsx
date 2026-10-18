@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { describeError } from "../api/errors";
@@ -43,13 +43,18 @@ export default function PasswordConfirmModal({
 
 	if (!visible) return null;
 
+	const close = () => {
+		Keyboard.dismiss();
+		onClose();
+	};
+
 	const submit = async () => {
 		if (!password || busy) return;
 		setBusy(true);
 		setError(null);
 		try {
 			await onSubmit(password);
-			onClose();
+			close();
 		} catch (e) {
 			setError(describeError(e, "face_setup_failed"));
 			setBusy(false);
@@ -57,7 +62,7 @@ export default function PasswordConfirmModal({
 	};
 
 	return (
-		<Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+		<Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
 			<KeyboardAvoidingView
 				style={styles.screen}
 				behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -67,7 +72,7 @@ export default function PasswordConfirmModal({
 						{title}
 					</Text>
 					<Pressable
-						onPress={onClose}
+						onPress={close}
 						hitSlop={12}
 						accessibilityRole="button"
 						accessibilityLabel={t("cancel")}

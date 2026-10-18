@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import DateField from "./DateField";
@@ -51,6 +51,11 @@ export default function CareFormModal({ kind, editing, busy, onClose, onSubmit }
 	const nameRequired = kind !== "parasite";
 	const canSave = !busy && (!nameRequired || name.trim().length > 0);
 
+	const close = () => {
+		Keyboard.dismiss();
+		onClose();
+	};
+
 	const save = async () => {
 		const ok = await onSubmit(kind, {
 			name: name.trim(),
@@ -59,7 +64,7 @@ export default function CareFormModal({ kind, editing, busy, onClose, onSubmit }
 			nextDueAt: hasNext ? nextDueAt : null,
 			notes,
 		});
-		if (ok) onClose();
+		if (ok) close();
 	};
 
 	return (
@@ -67,7 +72,7 @@ export default function CareFormModal({ kind, editing, busy, onClose, onSubmit }
 			visible
 			animationType="slide"
 			presentationStyle="pageSheet"
-			onRequestClose={onClose}
+			onRequestClose={close}
 		>
 			<KeyboardAvoidingView
 				style={styles.flex}
@@ -148,7 +153,7 @@ export default function CareFormModal({ kind, editing, busy, onClose, onSubmit }
 
 					<Animated.View style={styles.actions} layout={m.layout}>
 						<View style={styles.action}>
-							<AppButton variant="secondary" title={t("cancel")} onPress={onClose} />
+							<AppButton variant="secondary" title={t("cancel")} onPress={close} />
 						</View>
 						<View style={styles.action}>
 							<AppButton title={t("save")} onPress={save} disabled={!canSave} />

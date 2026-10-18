@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+	Keyboard,
 	KeyboardAvoidingView,
 	Modal,
 	Platform,
@@ -65,15 +66,23 @@ export default function DogManagerModal({ visible, initialMode = "list", onClose
 
 	if (!visible) return null;
 
+	// A focused text field must lose focus before it leaves the screen, or React Native
+	// logs "instanceHandle is null, topEndEditing will be dropped" (harmless, but noisy).
+	const close = () => {
+		Keyboard.dismiss();
+		onClose();
+	};
+
 	const go = (next: DogManagerMode) => {
+		Keyboard.dismiss();
 		setError(null);
 		setMode(next);
 	};
 	// Back goes to the list, unless the sheet opened straight onto a form.
-	const back = () => (initialMode === "list" ? go("list") : onClose());
+	const back = () => (initialMode === "list" ? go("list") : close());
 
 	const choose = async (id: number) => {
-		onClose();
+		close();
 		await selectPet(id);
 	};
 
@@ -87,7 +96,7 @@ export default function DogManagerModal({ visible, initialMode = "list", onClose
 				date_of_birth: hasBirthday ? localDate(birthday) : undefined,
 				timezone: deviceTimeZone(),
 			});
-			onClose();
+			close();
 		} catch (e) {
 			setError(describeError(e, "dog_create_failed"));
 			setBusy(false);
@@ -99,7 +108,7 @@ export default function DogManagerModal({ visible, initialMode = "list", onClose
 		setError(null);
 		try {
 			await joinWithCode(code);
-			onClose();
+			close();
 		} catch (e) {
 			setError(describeError(e, "join_failed"));
 			setBusy(false);
@@ -110,7 +119,7 @@ export default function DogManagerModal({ visible, initialMode = "list", onClose
 		mode === "list" ? t("dogs_title") : mode === "create" ? t("dog_create_title") : t("join_title");
 
 	return (
-		<Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+		<Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
 			<KeyboardAvoidingView
 				style={styles.flex}
 				behavior={Platform.OS === "ios" ? "padding" : undefined}

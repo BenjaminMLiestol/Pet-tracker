@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
@@ -68,6 +68,8 @@ const LoginScreen: React.FC = () => {
 	}, []);
 
 	const onSubmit = async () => {
+		// The login screen unmounts on success; drop the keyboard first.
+		Keyboard.dismiss();
 		if (missing) {
 			Alert.alert(t("login_missing_title"), t("login_missing_message"));
 			return;

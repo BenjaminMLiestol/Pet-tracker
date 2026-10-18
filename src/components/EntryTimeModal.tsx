@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { Keyboard, Modal, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { space, useTheme, type Colors } from "../theme";
@@ -48,24 +48,30 @@ export default function EntryTimeModal({
 
 	if (!visible) return null;
 
+	const close = () => {
+		Keyboard.dismiss();
+		onClose();
+	};
+
 	const save = async () => {
+		Keyboard.dismiss();
 		setSaving(true);
 		// The picker's limit is by minute; never send a moment ahead of the server's clock.
 		const at = value.getTime() > Date.now() ? new Date() : value;
 		const ok = await onSave(at);
-		if (ok) onClose();
+		if (ok) close();
 		else setSaving(false);
 	};
 
 	return (
-		<Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+		<Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
 			<View style={styles.screen}>
 				<View style={styles.header}>
 					<Text variant="title" style={styles.title}>
 						{title}
 					</Text>
 					<Pressable
-						onPress={onClose}
+						onPress={close}
 						hitSlop={12}
 						accessibilityRole="button"
 						accessibilityLabel={t("cancel")}
