@@ -14,6 +14,7 @@ import { describeError } from "../api/errors";
 import { calendarDay, deviceTimeZone, isSameDay } from "../utils/dates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiDelete, apiFetch } from "../api/client";
+import { takePendingLogs } from "../api/widget";
 import {
 	OUTBOX_PATH,
 	bodyFor,
@@ -603,6 +604,29 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			cancelled = true;
 		};
 	}, [token, commitOutbox, flushPending]);
+
+	// Logs made from the home-screen widget while there was no connection are queued here too,
+	// under the id the widget gave them, so one that did reach the server isn't saved twice.
+	const importWidgetLogs = useCallback(() => {
+		const logs = takePendingLogs();
+		if (logs.length === 0) return;
+		const known = new Set(outboxRef.current.map((i) => i.id));
+		const items: OutboxItem[] = logs
+			.filter((l) => !known.has(l.id))
+			.map((l) => ({ id: l.id, tempId: newTempId(), kind: l.kind, petId: l.petId, at: l.at }));
+		if (items.length === 0) return;
+		commitOutbox([...outboxRef.current, ...items]);
+		flushPending();
+	}, [commitOutbox, flushPending]);
+
+	useEffect(() => {
+		if (!token) return;
+		importWidgetLogs();
+		const sub = AppState.addEventListener("change", (state) => {
+			if (state === "active") importWidgetLogs();
+		});
+		return () => sub.remove();
+	}, [token, importWidgetLogs]);
 
 	// Keep trying while something waits: every 20 seconds, and when the app comes forward.
 	useEffect(() => {

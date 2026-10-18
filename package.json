@@ -12,6 +12,7 @@
     "verify": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^5.0.0",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
@@ -20,6 +21,7 @@
     "@react-navigation/native-stack": "^7.3.27",
     "@types/jest": "29.5.14",
     "expo": "~54.0.37",
+    "expo-build-properties": "~1.0.10",
     "expo-constants": "~18.0.14",
     "expo-file-system": "~19.0.24",
     "expo-local-authentication": "~17.0.9",

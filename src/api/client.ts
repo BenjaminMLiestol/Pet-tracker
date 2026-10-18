@@ -5,6 +5,8 @@ const API_ROOT = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/api'
 // The backend versions its routes; bump this when the app moves to a new API version.
 const API_VERSION = 'v1';
 const BASE_URL = `${API_ROOT}/${API_VERSION}`;
+// Also handed to the home-screen widget, which makes its own requests.
+export const API_BASE_URL = BASE_URL;
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
