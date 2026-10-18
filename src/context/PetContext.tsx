@@ -86,6 +86,9 @@ export type PetContextValue = {
 	feedingsPerDay: number;
 	walksPerDay: number;
 	setDailyGoal: (kind: GoalKind, perDay: number) => Promise<boolean>;
+	food: FoodSettings | null;
+	// Saves the bag (any part of it); `null` removes the food tracker. Resolves true when saved.
+	saveFood: (patch: Partial<FoodSettings> | null) => Promise<boolean>;
 	nextBathDueAt: Date | null;
 	isBathDue: boolean;
 	bathOverdueDays: number;
@@ -121,6 +124,8 @@ export const DEFAULT_BATH_INTERVAL_DAYS = 30;
 export const DEFAULT_FEEDINGS_PER_DAY = 1;
 export const DEFAULT_WALKS_PER_DAY = 2;
 export type GoalKind = "feedings" | "walks";
+// The current bag of food (shared by the owners); null until it is set up.
+export type FoodSettings = { bagGrams: number; dailyGrams: number; startedOn: string };
 
 // ===== Backend API shapes =====
 type ApiPet = {
@@ -132,6 +137,9 @@ type ApiPet = {
 	bath_interval_days?: number | null;
 	feedings_per_day?: number | null;
 	walks_per_day?: number | null;
+	food_bag_grams?: number | null;
+	food_daily_grams?: number | null;
+	food_started_on?: string | null;
 	date_of_birth?: string | null;
 	// Everyone who looks after the dog (names only; emails stay private).
 	users?: DogOwner[];
@@ -833,6 +841,36 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		[pet],
 	);
 
+	// The food bag: optimistic like the other shared settings, rolled back if the server refuses.
+	const saveFood = useCallback(
+		async (patch: Partial<FoodSettings> | null): Promise<boolean> => {
+			if (!pet) return false;
+			const body =
+				patch === null
+					? { food_bag_grams: null, food_daily_grams: null, food_started_on: null }
+					: {
+							...(patch.bagGrams !== undefined && { food_bag_grams: patch.bagGrams }),
+							...(patch.dailyGrams !== undefined && { food_daily_grams: patch.dailyGrams }),
+							...(patch.startedOn !== undefined && { food_started_on: patch.startedOn }),
+						};
+			const previous = {
+				food_bag_grams: pet.food_bag_grams ?? null,
+				food_daily_grams: pet.food_daily_grams ?? null,
+				food_started_on: pet.food_started_on ?? null,
+			};
+			setPet((p) => (p ? { ...p, ...body } : p));
+			try {
+				const saved = await apiFetch<ApiPet>(`/pets/${pet.id}`, { method: "PATCH", body });
+				setPet((p) => (p && p.id === saved.id ? { ...p, ...saved } : p));
+				return true;
+			} catch {
+				setPet((p) => (p && p.id === pet.id ? { ...p, ...previous } : p));
+				return false;
+			}
+		},
+		[pet],
+	);
+
 	// ---- Refresh: this dog's data and the dog list (co-owners, shared settings) ----
 	const refresh = useCallback(async () => {
 		if (!pet?.id) return;
@@ -907,6 +945,19 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	}, [loadPets]);
 
 	// ---- Derived values ----
+	// Stable between renders unless the bag itself changes, so effects that depend on it
+	// (the reminder schedule) don't re-run on every unrelated update.
+	const foodBagGrams = pet?.food_bag_grams ?? null;
+	const foodDailyGrams = pet?.food_daily_grams ?? null;
+	const foodStartedOn = pet?.food_started_on ?? null;
+	const food = useMemo<FoodSettings | null>(
+		() =>
+			foodBagGrams && foodDailyGrams && foodStartedOn
+				? { bagGrams: foodBagGrams, dailyGrams: foodDailyGrams, startedOn: foodStartedOn }
+				: null,
+		[foodBagGrams, foodDailyGrams, foodStartedOn],
+	);
+
 	const value = useMemo<PetContextValue>(() => {
 		const today = new Date();
 		const timezone = pet?.timezone || deviceTimeZone();
@@ -1011,6 +1062,8 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			feedingsPerDay,
 			walksPerDay,
 			setDailyGoal,
+			food,
+			saveFood,
 			nextBathDueAt,
 			isBathDue,
 			bathOverdueDays,
@@ -1058,6 +1111,8 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		removeBath,
 		setBathInterval,
 		setDailyGoal,
+		food,
+		saveFood,
 		setWeightToday,
 		updateWeight,
 		removeWeight,

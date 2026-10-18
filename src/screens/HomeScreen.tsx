@@ -11,7 +11,9 @@ import { radius, smooth, space, useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
 import DogManagerModal from "../components/DogManagerModal";
 import WeekInsights from "../components/WeekInsights";
-import { Group, PressScale, Row, Screen, Section, Surface } from "../components/ui";
+import FoodModal from "../components/FoodModal";
+import { foodSupply } from "../utils/food";
+import { Group, PressRow, PressScale, Row, Screen, Section, Surface } from "../components/ui";
 
 const DOG_IMG = require("../../assets/dog.png");
 
@@ -23,6 +25,7 @@ export default function HomeScreen() {
 	const navigation = useNavigation<any>();
 	const { user } = useAuth();
 	const [dogsOpen, setDogsOpen] = useState(false);
+	const [foodOpen, setFoodOpen] = useState(false);
 	const {
 		name,
 		breed,
@@ -30,6 +33,7 @@ export default function HomeScreen() {
 		walksToday,
 		feedingsPerDay,
 		walksPerDay,
+		food,
 		lastBathAt,
 		currentWeightKg,
 		timezone,
@@ -38,6 +42,7 @@ export default function HomeScreen() {
 	} = usePet();
 
 	const displayName = user?.first_name?.trim() || user?.email || t("friend");
+	const supply = foodSupply(food, Date.now(), timezone);
 
 	const df = new Intl.DateTimeFormat(i18n.language === "nb" ? "nb-NO" : "en-US", {
 		day: "numeric",
@@ -119,6 +124,30 @@ export default function HomeScreen() {
 							</Text>
 						}
 					/>
+					<PressRow
+						title={t("food_title")}
+						right={
+							<View style={styles.foodRight}>
+								<Text
+									variant="body"
+									tone={supply ? "default" : "muted"}
+									style={[
+										styles.value,
+										supply?.status === "low" && { color: c.accentText },
+										supply?.status === "out" && { color: c.danger },
+									]}
+								>
+									{supply
+										? supply.status === "out"
+											? t("food_out")
+											: t("food_days_left", { count: supply.daysLeft })
+										: t("food_setup")}
+								</Text>
+								<Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+							</View>
+						}
+						onPress={() => setFoodOpen(true)}
+					/>
 					<Row
 						title={t("current_weight")}
 						right={
@@ -133,6 +162,8 @@ export default function HomeScreen() {
 					/>
 				</Group>
 			</Section>
+
+			<FoodModal visible={foodOpen} onClose={() => setFoodOpen(false)} />
 
 			<Section label={t("week_title")}>
 				<WeekInsights />
@@ -216,6 +247,7 @@ const makeStyles = (c: Colors & { isDark: boolean }) =>
 			paddingBottom: space[5],
 			gap: space[1],
 		},
+		foodRight: { flexDirection: "row", alignItems: "center", gap: space[1] },
 		statZero: { color: c.textMuted },
 		statRow: { flexDirection: "row", alignItems: "baseline" },
 		goal: { marginLeft: space[1], fontVariant: ["tabular-nums"] },

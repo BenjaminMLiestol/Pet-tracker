@@ -14,8 +14,12 @@ import { useTranslation } from "react-i18next";
 import { usePet } from "./PetContext";
 import { useCare } from "./CareContext";
 import { planCareReminders, type CareDue } from "../utils/careReminders";
+import { planFoodReminders } from "../utils/food";
 import { reminderTimes, useAuth } from "./AuthContext";
 import { isPartial, isSameCalendarDay, parseTime, planDailyReminders } from "../utils/reminders";
+
+// Rebuilds of the reminder schedule wait for each other (see the effect below).
+let schedulingQueue: Promise<void> = Promise.resolve();
 
 const STORAGE_KEY = "app/reminders-enabled";
 const CHANNEL_ID = "reminders";
@@ -78,6 +82,7 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		walksToday,
 		feedingsPerDay,
 		walksPerDay,
+		food,
 		weights,
 		sync,
 		timezone,
@@ -121,7 +126,11 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: appActiveTick is a re-run trigger
 	useEffect(() => {
 		let cancelled = false;
-		(async () => {
+		// One rebuild at a time. Several changes arrive in a burst (the dog, its goals, the care
+		// records and the bag all load one after another), and rebuilds that overlap each add
+		// their own copies of every reminder.
+		const run = async () => {
+			if (cancelled) return; // superseded while waiting its turn
 			await Notifications.cancelAllScheduledNotificationsAsync();
 			if (!enabled || !token || !name || cancelled) return;
 			if (!(await ensurePermission())) return;
@@ -132,7 +141,8 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 				title: string,
 				body: string,
 			): Promise<void> => {
-				if (date.getTime() <= now.getTime()) return;
+				// A newer rebuild has taken over: stop adding to a schedule it is about to clear.
+				if (cancelled || date.getTime() <= now.getTime()) return;
 				await Notifications.scheduleNotificationAsync({
 					content: { title, body },
 					trigger: {
@@ -199,6 +209,15 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 				);
 			}
 
+			// Dog food: a week before the bag runs out, and on the day.
+			for (const reminder of planFoodReminders(food, now, timezone)) {
+				await schedule(
+					reminder.at,
+					t(reminder.when === "soon" ? "reminder_food_soon_title" : "reminder_food_today_title"),
+					t(reminder.when === "soon" ? "reminder_food_soon_body" : "reminder_food_today_body", { name }),
+				);
+			}
+
 			// Next Sundays, skipping any within 6 days of the last logged weight.
 			const daysUntilSunday = (WEIGH_IN_DAY - now.getDay() + 7) % 7;
 			for (let w = 0; w < WEIGH_IN_WEEKS_AHEAD; w += 1) {
@@ -210,7 +229,10 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 					t("reminder_weight_body", { name }),
 				);
 			}
-		})().catch((e) => console.warn("Failed to schedule reminders", e));
+		};
+		schedulingQueue = schedulingQueue
+			.then(run)
+			.catch((e) => console.warn("Failed to schedule reminders", e));
 		return () => {
 			cancelled = true;
 		};
@@ -226,6 +248,7 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		walksPerDay,
 		lastWeightAt,
 		care,
+		food,
 		timezone,
 		feedingTime,
 		walkTime,
