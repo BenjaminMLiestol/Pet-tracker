@@ -10,6 +10,7 @@ appId: com.benjaminliestol.pettracker
 - scrollUntilVisible:
     element: "Turer per dag|Walks per day"
     direction: DOWN
+    centerElement: true  # not at the screen's edge, where the tab bar would catch the tap
 - tapOn:
     id: "goal-walks-more"
 # The setting saves a moment after the last tap, then a toast confirms it.

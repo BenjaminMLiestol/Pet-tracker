@@ -2,31 +2,13 @@
 # goals (1 feeding, 2 walks). Texts are matched in Norwegian and English.
 appId: com.benjaminliestol.pettracker
 ---
-- launchApp
-# Someone may be signed in from before (you, or a test run whose account is gone by now and which
-# the app signs out by itself a moment later). The app takes a few seconds to show either screen,
-# so: sign out if the tabs are there, wait for the login screen, and if it hasn't come, look again.
-- retry:
-    maxRetries: 3
-    commands:
-      - runFlow:
-          when:
-            visible:
-              id: "tab-home"
-          commands:
-            - tapOn:
-                id: "tab-profile"
-                optional: true
-            - scrollUntilVisible:
-                element: "Logg ut|Log out"
-                direction: DOWN
-                optional: true
-            - tapOn:
-                text: "Logg ut|Log out"
-                optional: true
-      - extendedWaitUntil:
-          visible: "Velkommen tilbake|Welcome back"
-          timeout: 8000
+# Start from a clean app, so signing in is the first thing that happens: whoever was signed in
+# before (you, or an earlier test run) is gone, and there is nothing to sign out of.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Velkommen tilbake|Welcome back"
+    timeout: 30000
 - tapOn:
     id: "email"
 - inputText: ${E2E_EMAIL}

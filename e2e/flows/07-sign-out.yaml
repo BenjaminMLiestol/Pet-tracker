@@ -10,5 +10,6 @@ appId: com.benjaminliestol.pettracker
 - scrollUntilVisible:
     element: "Logg ut|Log out"
     direction: DOWN
+    centerElement: true  # not at the screen's edge, where the tab bar would catch the tap
 - tapOn: "Logg ut|Log out"
 - assertVisible: "Velkommen tilbake|Welcome back"

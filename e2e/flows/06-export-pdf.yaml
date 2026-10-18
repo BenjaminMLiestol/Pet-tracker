@@ -10,6 +10,7 @@ appId: com.benjaminliestol.pettracker
 - scrollUntilVisible:
     element: "Veterinæroppsummering \\(PDF\\)|Vet summary \\(PDF\\)"
     direction: DOWN
+    centerElement: true  # not at the screen's edge, where the tab bar would catch the tap
 - tapOn: "Veterinæroppsummering \\(PDF\\)|Vet summary \\(PDF\\)"
 - extendedWaitUntil:
     visible: "e2e-dog-vet-summary-.*"
