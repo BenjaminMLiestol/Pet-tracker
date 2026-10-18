@@ -173,13 +173,13 @@ export default function App() {
         <AuthProvider>
           <PetProvider>
             <PushSync />
-            <RemindersProvider>
-              <CareProvider>
+            <CareProvider>
+              <RemindersProvider>
                 <ThemedNavigation>
                   <RootNavigator />
                 </ThemedNavigation>
-              </CareProvider>
-            </RemindersProvider>
+              </RemindersProvider>
+            </CareProvider>
           </PetProvider>
         </AuthProvider>
       </ToastProvider>

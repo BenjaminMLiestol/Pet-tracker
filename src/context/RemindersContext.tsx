@@ -12,6 +12,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { useTranslation } from "react-i18next";
 import { usePet } from "./PetContext";
+import { useCare } from "./CareContext";
+import { planCareReminders, type CareDue } from "../utils/careReminders";
 import { reminderTimes, useAuth } from "./AuthContext";
 import { parseTime, planDailyReminders } from "../utils/reminders";
 
@@ -68,7 +70,8 @@ function at(base: Date, dayOffset: number, hour: number): Date {
 export function RemindersProvider({ children }: { children: ReactNode }) {
 	const { t, i18n } = useTranslation();
 	const { token, user } = useAuth();
-	const { name, hasFedToday, hasWalkedToday, weights, sync } = usePet();
+	const { name, hasFedToday, hasWalkedToday, weights, sync, timezone } = usePet();
+	const { records: care } = useCare();
 	const { feeding: feedingTime, walk: walkTime } = reminderTimes(user);
 	const [enabled, setEnabledState] = useState(false);
 	const [appActiveTick, setAppActiveTick] = useState(0);
@@ -146,6 +149,37 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 				);
 			}
 
+			// Vaccinations, vet visits and treatments: a week before and on the day they are due.
+			const dueItems: CareDue[] = [
+				...care.vet.map((r) => ({ kind: "vet" as const, label: r.name, date: r.date, nextDueAt: r.nextDueAt })),
+				...care.vaccination.map((r) => ({
+					kind: "vaccination" as const,
+					label: r.name,
+					date: r.date,
+					nextDueAt: r.nextDueAt,
+				})),
+				...care.parasite.map((r) => ({
+					kind: "parasite" as const,
+					label: r.name,
+					parasiteType: r.parasiteType,
+					date: r.date,
+					nextDueAt: r.nextDueAt,
+				})),
+			];
+			for (const reminder of planCareReminders({ now, items: dueItems, timeZone: timezone })) {
+				const what =
+					reminder.kind === "parasite"
+						? [t(`parasite_${reminder.parasiteType ?? "flea"}`), reminder.label].filter(Boolean).join(" ")
+						: reminder.kind === "vet"
+							? [t("care_section_vet"), reminder.label].filter(Boolean).join(": ")
+							: reminder.label;
+				await schedule(
+					reminder.at,
+					t(reminder.when === "soon" ? "reminder_care_soon_title" : "reminder_care_today_title"),
+					t(reminder.when === "soon" ? "reminder_care_soon_body" : "reminder_care_today_body", { name, what }),
+				);
+			}
+
 			// Next Sundays, skipping any within 6 days of the last logged weight.
 			const daysUntilSunday = (WEIGH_IN_DAY - now.getDay() + 7) % 7;
 			for (let w = 0; w < WEIGH_IN_WEEKS_AHEAD; w += 1) {
@@ -168,6 +202,8 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		hasFedToday,
 		hasWalkedToday,
 		lastWeightAt,
+		care,
+		timezone,
 		feedingTime,
 		walkTime,
 		i18n.language,
