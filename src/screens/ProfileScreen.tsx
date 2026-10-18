@@ -59,6 +59,7 @@ export default function ProfileScreen() {
 	} = usePet();
 	const [dogsOpen, setDogsOpen] = useState(false);
 	const [inviteOpen, setInviteOpen] = useState(false);
+	const [savingPhoto, setSavingPhoto] = useState(false);
 	const toast = useToast();
 	const m = useMotion();
 	const isFocused = useIsFocused();
@@ -70,7 +71,7 @@ export default function ProfileScreen() {
 	// The dog's photo is chosen from the photo library and kept on this phone only.
 	const changePhoto = async () => {
 		if (petId == null) return;
-		const result = await pickDogPhoto(petId);
+		const result = await pickDogPhoto(petId, () => setSavingPhoto(true)).finally(() => setSavingPhoto(false));
 		if (result === "failed") toast.show(t("dog_photo_failed"), "error");
 	};
 	const photoMenu = () => {
@@ -249,8 +250,14 @@ export default function ProfileScreen() {
 					<PressRow
 						title={t("dog_photo_row", { name: petName })}
 						left={<DogAvatar petId={petId} size={32} />}
-						right={<Ionicons name="chevron-forward" size={18} color={c.textMuted} />}
-						onPress={photoMenu}
+						right={
+							savingPhoto ? (
+								<ActivityIndicator color={c.textMuted} />
+							) : (
+								<Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+							)
+						}
+						onPress={savingPhoto ? () => {} : photoMenu}
 					/>
 				</Group>
 				<Text variant="caption" tone="muted" style={styles.hint}>

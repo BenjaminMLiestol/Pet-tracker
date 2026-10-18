@@ -37,20 +37,29 @@ const notify = () => listeners.forEach((l) => l());
 
 export type PickResult = "saved" | "cancelled" | "failed";
 
-/** Lets the person choose and crop a picture, then keeps it as the dog's photo. */
-export async function pickDogPhoto(petId: number): Promise<PickResult> {
+/** Lets the person choose a picture (cropped to a centred square), then keeps it as the dog's photo. */
+export async function pickDogPhoto(petId: number, onPicked?: () => void): Promise<PickResult> {
 	try {
+		// No in-picker crop: with allowsEditing iOS opens the old full-screen picker, which is
+		// slow to appear; without it the fast system photo picker is used. The picture is cropped
+		// to a centred square below instead.
 		const picked = await ImagePicker.launchImageLibraryAsync({
 			mediaTypes: ["images"],
-			allowsEditing: true,
-			aspect: [1, 1],
 			quality: 1,
+			exif: false,
+			preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
 		});
 		if (picked.canceled || !picked.assets?.[0]) return "cancelled";
+		onPicked?.();
 
+		const { uri, width, height } = picked.assets[0];
+		const side = Math.min(width, height);
 		const small = await ImageManipulator.manipulateAsync(
-			picked.assets[0].uri,
-			[{ resize: { width: SIZE } }],
+			uri,
+			[
+				{ crop: { originX: Math.floor((width - side) / 2), originY: Math.floor((height - side) / 2), width: side, height: side } },
+				{ resize: { width: SIZE } },
+			],
 			{ compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
 		);
 		const dir = ensureFolder();
