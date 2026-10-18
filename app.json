@@ -56,7 +56,13 @@
         }
       ],
       "./plugins/withoutPushEntitlement",
-      "./plugins/withPodsMinDeployment"
+      "./plugins/withPodsMinDeployment",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pet Tracker trenger tilgang til bildene dine for at du kan velge et bilde av hunden."
+        }
+      ]
     ]
   }
 }

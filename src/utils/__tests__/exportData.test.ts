@@ -107,6 +107,23 @@ describe("buildSummaryHtml", () => {
 		expect(evil).toContain("a &amp; b");
 	});
 
+	it("puts the dog's photo in the header, and only if it is plain base64", () => {
+		const withPhoto = buildSummaryHtml(
+			data({ dog: { name: "Toya", breed: "", birthday: null, photo: "/9j/4AAQSkZJRg==" } }),
+			labels,
+			"en-GB",
+		);
+		expect(withPhoto).toContain('<img class="photo" alt="" src="data:image/jpeg;base64,/9j/4AAQSkZJRg==">');
+
+		// Anything that could close the tag or add attributes is left out entirely.
+		for (const bad of ['x" onerror="alert(1)', "x><script>", "<svg onload=1>"]) {
+			const out = buildSummaryHtml(data({ dog: { name: "Toya", breed: "", birthday: null, photo: bad } }), labels, "en-GB");
+			expect(out).not.toContain("<img");
+			expect(out).not.toContain("onerror");
+		}
+		expect(buildSummaryHtml(data(), labels, "en-GB")).not.toContain("<img");
+	});
+
 	it("says so for an empty section instead of printing an empty table", () => {
 		const empty = buildSummaryHtml(data({ vaccinations: [], parasites: [], vet: [], weights: [] }), labels, "en-GB");
 		expect(empty.match(/Nothing logged/g)).toHaveLength(4);

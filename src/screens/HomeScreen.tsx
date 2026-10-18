@@ -11,6 +11,7 @@ import { radius, smooth, space, useTheme, type Colors } from "../theme";
 import { Text } from "../components/themed";
 import DogManagerModal from "../components/DogManagerModal";
 import WeekInsights from "../components/WeekInsights";
+import { useDogPhoto } from "../api/dogPhotos";
 import FoodModal from "../components/FoodModal";
 import { foodSupply } from "../utils/food";
 import { Group, PressRow, PressScale, Row, Screen, Section, Surface } from "../components/ui";
@@ -27,6 +28,7 @@ export default function HomeScreen() {
 	const [dogsOpen, setDogsOpen] = useState(false);
 	const [foodOpen, setFoodOpen] = useState(false);
 	const {
+		petId,
 		name,
 		breed,
 		feedingsToday,
@@ -43,6 +45,7 @@ export default function HomeScreen() {
 
 	const displayName = user?.first_name?.trim() || user?.email || t("friend");
 	const supply = foodSupply(food, Date.now(), timezone);
+	const photo = useDogPhoto(petId);
 
 	const df = new Intl.DateTimeFormat(i18n.language === "nb" ? "nb-NO" : "en-US", {
 		day: "numeric",
@@ -85,13 +88,23 @@ export default function HomeScreen() {
 							</Text>
 						) : null}
 					</View>
-					<Image
-						source={DOG_IMG}
-						style={styles.heroImage}
-						resizeMode="contain"
-						accessible
-						accessibilityLabel={t("dog_image_alt", { defaultValue: "Dog" })}
-					/>
+					{photo ? (
+						<Image
+							source={{ uri: photo }}
+							style={styles.heroPhoto}
+							accessible
+							accessibilityLabel={name}
+							accessibilityIgnoresInvertColors
+						/>
+					) : (
+						<Image
+							source={DOG_IMG}
+							style={styles.heroImage}
+							resizeMode="contain"
+							accessible
+							accessibilityLabel={t("dog_image_alt", { defaultValue: "Dog" })}
+						/>
+					)}
 				</View>
 			</PressScale>
 			<DogManagerModal visible={dogsOpen} onClose={() => setDogsOpen(false)} />
@@ -239,6 +252,7 @@ const makeStyles = (c: Colors & { isDark: boolean }) =>
 		heroName: { color: c.isDark ? c.text : c.accentText, flexShrink: 1 },
 		heroBreed: { color: c.textSecondary, marginTop: 2 },
 		heroImage: { width: 176, height: 176 },
+		heroPhoto: { width: 150, height: 150, borderRadius: radius.lg, marginBottom: space[4], marginRight: space[1], ...smooth },
 		tiles: { flexDirection: "row", gap: space[3] },
 		tileWrap: { flex: 1 },
 		tile: {

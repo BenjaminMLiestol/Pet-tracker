@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { usePet } from "../context/PetContext";
 import { useCare } from "../context/CareContext";
 import { sharePdf, shareCsv } from "../api/exportFiles";
+import { readDogPhotoBase64 } from "../api/dogPhotos";
 import {
 	buildCsv,
 	buildSummaryHtml,
@@ -16,7 +17,7 @@ import {
 // the share sheet. `busy` is the one running; `error` is true when the last attempt failed.
 export function useExport() {
 	const { t, i18n } = useTranslation();
-	const { name, breed, birthday, timezone, weights, baths } = usePet();
+	const { petId, name, breed, birthday, timezone, weights, baths } = usePet();
 	const { records } = useCare();
 	const [busy, setBusy] = useState<"pdf" | "csv" | null>(null);
 	const locale = i18n.language === "nb" ? "nb-NO" : "en-GB";
@@ -33,6 +34,7 @@ export function useExport() {
 						breed,
 						// A plain date, shown as written, so read it as UTC to keep the day.
 						birthday: birthday ? formatDate(Date.parse(birthday), locale, "UTC") : null,
+						photo: petId == null ? null : readDogPhotoBase64(petId),
 					},
 					timeZone: timezone,
 					generatedAt: now,
@@ -87,7 +89,7 @@ export function useExport() {
 				setBusy(null);
 			}
 		},
-		[busy, name, breed, birthday, timezone, weights, baths, records, t, locale],
+		[busy, petId, name, breed, birthday, timezone, weights, baths, records, t, locale],
 	);
 
 	return { busy, exportPdf: () => run("pdf"), exportCsv: () => run("csv") };

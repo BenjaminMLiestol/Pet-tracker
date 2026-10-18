@@ -11,7 +11,8 @@ export type CareExport = {
 };
 
 export type ExportData = {
-	dog: { name: string; breed: string; birthday: string | null };
+	// `photo` is the picture as base64 JPEG (kept on this phone), or null.
+	dog: { name: string; breed: string; birthday: string | null; photo?: string | null };
 	timeZone: string;
 	generatedAt: number;
 	weights: { timestamp: number; weightKg: number }[];
@@ -98,6 +99,8 @@ const STYLE = `
 * { box-sizing: border-box; }
 body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #15171c; font-size: 11pt; line-height: 1.4; }
 h1 { font-size: 22pt; margin: 0 0 2pt; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12pt; }
+img.photo { width: 72pt; height: 72pt; border-radius: 12pt; object-fit: cover; }
 h2 { font-size: 13pt; margin: 20pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5pt solid #e1a04a; }
 .sub { color: #5d6370; margin: 0; }
 .facts { margin: 12pt 0 0; }
@@ -111,6 +114,12 @@ table.narrow { width: 55%; }
 .empty { color: #5d6370; margin: 4pt 0; }
 .more { color: #5d6370; font-size: 9pt; margin-top: 4pt; }
 `;
+
+/** The photo as an <img>. Only a plain base64 string gets in, so nothing can break out of the tag. */
+function photoTag(photo: string | null | undefined): string {
+	if (!photo || !/^[A-Za-z0-9+/=\s]+$/.test(photo)) return "";
+	return `<img class="photo" alt="" src="data:image/jpeg;base64,${photo.replace(/\s/g, "")}">`;
+}
 
 function table(headers: string[], rows: string[][], className = ""): string {
 	const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
@@ -181,8 +190,10 @@ export function buildSummaryHtml(data: ExportData, labels: ExportLabels, locale:
 		: empty;
 
 	return `<!DOCTYPE html><html lang="${escapeHtml(locale)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>${STYLE}</style></head><body>
+<div class="head"><div>
 <h1>${escapeHtml(data.dog.name)}</h1>
 <p class="sub">${escapeHtml(labels.title)} · ${escapeHtml(labels.prepared)}</p>
+</div>${photoTag(data.dog.photo)}</div>
 <div class="facts">${facts.join("")}</div>
 <h2>${escapeHtml(labels.weights)}</h2>${weightSection}
 <h2>${escapeHtml(labels.vaccinations)}</h2>${vaccinationSection}

@@ -81,12 +81,15 @@ export function Section({
 export function Row({
 	title,
 	detail,
+	left,
 	right,
 	style,
 	titleColor,
 }: {
 	title: string;
 	detail?: string;
+	// Something before the text, such as an avatar.
+	left?: ReactNode;
 	right?: ReactNode;
 	style?: StyleProp<ViewStyle>;
 	titleColor?: string;
@@ -106,15 +109,18 @@ export function Row({
 				style,
 			]}
 		>
-			<View style={{ flexShrink: 1 }}>
-				<Text variant="body" style={titleColor ? { color: titleColor } : undefined}>
-					{title}
-				</Text>
-				{detail ? (
-					<Text variant="caption" tone="muted">
-						{detail}
+			<View style={{ flexDirection: "row", alignItems: "center", gap: space[3], flexShrink: 1 }}>
+				{left}
+				<View style={{ flexShrink: 1 }}>
+					<Text variant="body" style={titleColor ? { color: titleColor } : undefined}>
+						{title}
 					</Text>
-				) : null}
+					{detail ? (
+						<Text variant="caption" tone="muted">
+							{detail}
+						</Text>
+					) : null}
+				</View>
 			</View>
 			{right}
 		</View>
@@ -331,6 +337,7 @@ export function Stepper({
 export function PressRow({
 	title,
 	detail,
+	left,
 	right,
 	onPress,
 	titleColor,
@@ -338,6 +345,7 @@ export function PressRow({
 }: {
 	title: string;
 	detail?: string;
+	left?: ReactNode;
 	right?: ReactNode;
 	onPress: () => void;
 	titleColor?: string;
@@ -350,7 +358,7 @@ export function PressRow({
 			accessibilityLabel={accessibilityLabel ?? title}
 			style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
 		>
-			<Row title={title} detail={detail} right={right} titleColor={titleColor} />
+			<Row title={title} detail={detail} left={left} right={right} titleColor={titleColor} />
 		</Pressable>
 	);
 }

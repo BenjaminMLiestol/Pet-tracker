@@ -4,6 +4,7 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiError, apiFetch, registerUnauthorizedHandler } from '../api/client';
 import { unregisterFromPush } from '../api/push';
+import { clearAllDogPhotos } from '../api/dogPhotos';
 import { clearFaceLogin, getFaceLoginEmail, readFaceLogin, saveFaceLogin } from '../api/faceLogin';
 import i18n from '../i18n';
 import { refreshSession, resetSessionRefresh } from '../api/session';
@@ -94,6 +95,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setEndedBy(reason);
     setToken(null);
     setUser(null);
+    clearAllDogPhotos();
     await Promise.all([clearToken(), AsyncStorage.removeItem('authUser'), clearUserCache()]);
   }, []);
 

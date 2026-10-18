@@ -19,6 +19,7 @@ import { CODE_LENGTH, formatCode, looksLikeCode, normalizeCode } from "../utils/
 import { radius, smooth, space, type, useTheme, type Colors } from "../theme";
 import AppButton from "./AppButton";
 import DateField from "./DateField";
+import DogAvatar from "./DogAvatar";
 import { Text, TextInput } from "./themed";
 import { Group, Row } from "./ui";
 
@@ -160,6 +161,7 @@ export default function DogManagerModal({ visible, initialMode = "list", onClose
 										<Row
 											title={dog.name}
 											detail={dog.breed ?? undefined}
+											left={<DogAvatar petId={dog.id} size={40} />}
 											right={
 												dog.id === petId ? (
 													<Ionicons name="checkmark" size={22} color={c.text} />

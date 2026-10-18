@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, View } from "react-native";
+import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
@@ -21,6 +21,8 @@ import { Group, PressRow, Row, Screen, Section, Stepper, Surface } from "../comp
 import { useMotion } from "../motion";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit";
 import { useExport } from "../hooks/useExport";
+import DogAvatar from "../components/DogAvatar";
+import { getDogPhotoUri, pickDogPhoto, removeDogPhoto } from "../api/dogPhotos";
 import { formatTime, parseTime, timeToDate } from "../utils/reminders";
 import { space, type, useTheme, type Colors } from "../theme";
 
@@ -64,6 +66,36 @@ export default function ProfileScreen() {
 	const { busy: exporting, exportPdf, exportCsv } = useExport();
 	const exportAs = async (run: () => Promise<boolean>) => {
 		if (!(await run())) toast.show(t("export_failed"), "error");
+	};
+	// The dog's photo is chosen from the photo library and kept on this phone only.
+	const changePhoto = async () => {
+		if (petId == null) return;
+		const result = await pickDogPhoto(petId);
+		if (result === "failed") toast.show(t("dog_photo_failed"), "error");
+	};
+	const photoMenu = () => {
+		if (petId == null) return;
+		const has = getDogPhotoUri(petId) !== null;
+		if (Platform.OS === "ios") {
+			const options = [t("dog_photo_choose"), ...(has ? [t("dog_photo_remove")] : []), t("cancel")];
+			ActionSheetIOS.showActionSheetWithOptions(
+				{
+					options,
+					cancelButtonIndex: options.length - 1,
+					destructiveButtonIndex: has ? 1 : undefined,
+				},
+				(i) => {
+					if (i === 0) changePhoto();
+					else if (has && i === 1) removeDogPhoto(petId);
+				},
+			);
+		} else {
+			Alert.alert(t("dog_photo_row", { name: petName }), undefined, [
+				{ text: t("dog_photo_choose"), onPress: changePhoto },
+				...(has ? [{ text: t("dog_photo_remove"), style: "destructive" as const, onPress: () => removeDogPhoto(petId) }] : []),
+				{ text: t("cancel"), style: "cancel" as const },
+			]);
+		}
 	};
 	const bio = useBiometricInfo();
 	const [faceSetupOpen, setFaceSetupOpen] = useState(false);
@@ -214,7 +246,16 @@ export default function ProfileScreen() {
 						}
 						onPress={() => setDogsOpen(true)}
 					/>
+					<PressRow
+						title={t("dog_photo_row", { name: petName })}
+						left={<DogAvatar petId={petId} size={32} />}
+						right={<Ionicons name="chevron-forward" size={18} color={c.textMuted} />}
+						onPress={photoMenu}
+					/>
 				</Group>
+				<Text variant="caption" tone="muted" style={styles.hint}>
+					{t("dog_photo_hint")}
+				</Text>
 			</Section>
 
 			<Section label={t("owners_title")}>
