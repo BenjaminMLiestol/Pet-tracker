@@ -13,6 +13,7 @@ import DogManagerModal from "../components/DogManagerModal";
 import WeekInsights from "../components/WeekInsights";
 import { useDogPhoto } from "../api/dogPhotos";
 import FoodModal from "../components/FoodModal";
+import MedicineToday from "../components/MedicineToday";
 import { foodSupply } from "../utils/food";
 import { Group, PressRow, PressScale, Row, Screen, Section, Surface } from "../components/ui";
 
@@ -125,6 +126,8 @@ export default function HomeScreen() {
 					/>
 				</View>
 			</Section>
+
+			<MedicineToday />
 
 			<Section label={t("overview")}>
 				<Group>

@@ -15,6 +15,8 @@ import { usePet } from "./PetContext";
 import { useCare } from "./CareContext";
 import { planCareReminders, type CareDue } from "../utils/careReminders";
 import { planFoodReminders } from "../utils/food";
+import { useMedicines } from "./MedicineContext";
+import { planMedicineReminders } from "../utils/medicine";
 import { reminderTimes, useAuth } from "./AuthContext";
 import { isPartial, isSameCalendarDay, parseTime, planDailyReminders } from "../utils/reminders";
 
@@ -88,6 +90,7 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		timezone,
 	} = usePet();
 	const { records: care } = useCare();
+	const { medicines, doses } = useMedicines();
 	const { feeding: feedingTime, walk: walkTime } = reminderTimes(user);
 	const [enabled, setEnabledState] = useState(false);
 	const [appActiveTick, setAppActiveTick] = useState(0);
@@ -209,6 +212,20 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 				);
 			}
 
+			// Medicine: 30 minutes after each slot, only for doses not ticked off yet.
+			for (const r of planMedicineReminders({ now, medicines, doses, timeZone: timezone })) {
+				await schedule(
+					r.at,
+					t("reminder_medicine_title"),
+					t("reminder_medicine_body", {
+						name,
+						medicine: r.medicine.name,
+						dose: r.medicine.dose ? ` (${r.medicine.dose})` : "",
+						time: r.slot,
+					}),
+				);
+			}
+
 			// Dog food: a week before the bag runs out, and on the day.
 			for (const reminder of planFoodReminders(food, now, timezone)) {
 				await schedule(
@@ -249,6 +266,8 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		lastWeightAt,
 		care,
 		food,
+		medicines,
+		doses,
 		timezone,
 		feedingTime,
 		walkTime,

@@ -1,0 +1,29 @@
+# Add a medicine in Care (one dose a day at the default time), then tick today's dose on Home.
+appId: com.benjaminliestol.pettracker
+---
+- launchApp
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-care"
+      EXPECT: "Ingen medisiner ennå|No medicines yet"
+- tapOn:
+    id: "medicine-add"
+- tapOn:
+    id: "medicine-name"
+- inputText: "Testmedisin"
+- hideKeyboard
+- tapOn: "Lagre|Save"
+- extendedWaitUntil:
+    visible: ".*Testmedisin.*"
+    timeout: 10000
+- runFlow:
+    file: ../subflows/goto-tab.yaml
+    env:
+      TAB: "tab-home"
+      EXPECT: "Medisin i dag|Medicine today"
+- assertVisible: ".*Testmedisin.*(ikke gitt|not given|Forsinket|Late).*"
+- tapOn: ".*Testmedisin.*"
+- extendedWaitUntil:
+    visible: ".*Testmedisin: (gitt|given).*"
+    timeout: 10000

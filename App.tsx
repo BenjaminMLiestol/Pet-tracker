@@ -15,6 +15,7 @@ import { PetProvider, usePet } from './src/context/PetContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { RemindersProvider } from './src/context/RemindersContext';
 import { CareProvider } from './src/context/CareContext';
+import { MedicineProvider } from './src/context/MedicineContext';
 import CareScreen from './src/screens/CareScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -178,11 +179,13 @@ export default function App() {
             <PushSync />
             <WidgetSync />
             <CareProvider>
-              <RemindersProvider>
-                <ThemedNavigation>
-                  <RootNavigator />
-                </ThemedNavigation>
-              </RemindersProvider>
+              <MedicineProvider>
+                <RemindersProvider>
+                  <ThemedNavigation>
+                    <RootNavigator />
+                  </ThemedNavigation>
+                </RemindersProvider>
+              </MedicineProvider>
             </CareProvider>
           </PetProvider>
         </AuthProvider>

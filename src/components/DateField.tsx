@@ -16,9 +16,11 @@ type Props = {
 	mode?: "date" | "time";
 	// The latest date that can be picked (e.g. a birthday can't be in the future).
 	maximumDate?: Date;
+	// The earliest date that can be picked (an end date can't be in the past).
+	minimumDate?: Date;
 };
 
-export default function DateField({ label, value, onChange, mode = "date", maximumDate }: Props) {
+export default function DateField({ label, value, onChange, mode = "date", maximumDate, minimumDate }: Props) {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { i18n } = useTranslation();
@@ -46,6 +48,7 @@ export default function DateField({ label, value, onChange, mode = "date", maxim
 							mode,
 							is24Hour: true,
 							maximumDate,
+							minimumDate,
 							onChange: handle,
 						})
 					}
@@ -57,6 +60,7 @@ export default function DateField({ label, value, onChange, mode = "date", maxim
 					value={value}
 					mode={mode}
 					maximumDate={maximumDate}
+					minimumDate={minimumDate}
 					display="compact"
 					accessibilityLabel={label}
 					// iOS follows the locale for 12/24h; en-GB is the 24-hour English.

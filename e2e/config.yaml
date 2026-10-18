@@ -10,4 +10,5 @@ executionOrder:
     - 04-change-goal
     - 05-dog-food
     - 06-export-pdf
-    - 07-sign-out
+    - 07-medicine
+    - 08-sign-out

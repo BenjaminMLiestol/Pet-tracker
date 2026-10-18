@@ -13,6 +13,7 @@ import { Text } from "../components/themed";
 import { Group, Screen, Section, Surface } from "../components/ui";
 import { useFreshIds, useMotion } from "../motion";
 import { useToast } from "../components/Toast";
+import MedicineSection from "../components/MedicineSection";
 
 const KINDS: CareKind[] = ["vet", "vaccination", "parasite"];
 
@@ -91,6 +92,7 @@ export default function CareScreen() {
 	return (
 		<>
 			<Screen title={t("care_title")} refreshing={isFocused && refreshing} onRefresh={refresh}>
+				<MedicineSection />
 				{KINDS.map((kind) => (
 					<Animated.View key={kind} layout={m.layout}>
 						<Section
