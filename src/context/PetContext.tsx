@@ -8,19 +8,33 @@ import {
 	useEffect,
 	useRef,
 } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState } from "react-native";
 import i18n from "../i18n";
 import { describeError } from "../api/errors";
 import { calendarDay, deviceTimeZone, isSameDay } from "../utils/dates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiDelete, apiFetch } from "../api/client";
+import {
+	OUTBOX_PATH,
+	bodyFor,
+	flushOutbox,
+	isOfflineError,
+	isPendingId,
+	loadOutbox,
+	newClientId,
+	newTempId,
+	saveOutbox,
+	type OutboxItem,
+	type OutboxKind,
+} from "../api/outbox";
 import { useAuth } from "./AuthContext";
 
 // ===== Types expected by the rest of the app =====
-export type FeedingRecord = { id: number; timestamp: number; fed: boolean };
-export type BathRecord = { id: number; timestamp: number };
-export type WalkRecord = { id: number; timestamp: number; walked: boolean };
-export type WeightRecord = { id: number; timestamp: number; weightKg: number };
+// `pending`: saved on the phone, not yet on the server (logged without a connection).
+export type FeedingRecord = { id: number; timestamp: number; fed: boolean; pending?: boolean };
+export type BathRecord = { id: number; timestamp: number; pending?: boolean };
+export type WalkRecord = { id: number; timestamp: number; walked: boolean; pending?: boolean };
+export type WeightRecord = { id: number; timestamp: number; weightKg: number; pending?: boolean };
 
 export type PetContextValue = {
 	// All the dogs this person looks after, which one is active, and the loading state of that list.
@@ -74,6 +88,10 @@ export type PetContextValue = {
 
 	// True while a save request is in flight
 	busy: boolean;
+
+	// Entries logged offline that are still waiting to reach the server, and a way to try now.
+	pendingCount: number;
+	flushPending: () => Promise<void>;
 
 	// ⬇️ New for pull-to-refresh
 	refresh: () => Promise<void>;
@@ -484,192 +502,274 @@ export function PetProvider({ children }: { children: ReactNode }) {
 	}, [token, fetchActivities, activate, loadCached, clearActivities]);
 
 	// ---- Mutations: API-first (keeps server as source of truth), cache persists via effect ----
-	const addFeeding = useCallback(
-		(at?: Date) =>
+	// ---- Offline queue: entries logged without a connection wait here ----
+	const [outbox, setOutbox] = useState<OutboxItem[]>([]);
+	const outboxRef = useRef<OutboxItem[]>([]);
+	const flushing = useRef(false);
+
+	const commitOutbox = useCallback((next: OutboxItem[]) => {
+		outboxRef.current = next;
+		setOutbox(next);
+		saveOutbox(next);
+	}, []);
+
+	const sendItem = useCallback(
+		(item: OutboxItem) => apiFetch<unknown>(OUTBOX_PATH[item.kind], { method: "POST", body: bodyFor(item) }),
+		[],
+	);
+
+	// Puts an entry the server just confirmed into the lists (if its dog is on screen).
+	const applyCreated = useCallback((item: OutboxItem, response: unknown) => {
+		if (activePetId.current !== item.petId) return;
+		switch (item.kind) {
+			case "feeding":
+				setFeedings((prev) => mergeById(prev, [mapFeeding(response as ApiFeeding)]));
+				break;
+			case "walk":
+				setWalks((prev) => mergeById(prev, [mapWalk(response as ApiWalk)]));
+				break;
+			case "bath": {
+				const b = response as ApiBath;
+				setBaths((prev) => mergeById(prev, [{ id: b.id, timestamp: Date.parse(b.bathed_at) }]));
+				break;
+			}
+			case "weight": {
+				const w = response as ApiWeight;
+				setWeights((prev) =>
+					mergeById(prev, [{ id: w.id, timestamp: Date.parse(w.weighed_at), weightKg: Number(w.value) }]),
+				);
+				break;
+			}
+		}
+	}, []);
+
+	// Sends what is waiting, oldest first. Safe to call any time: one run at a time, and it
+	// stops quietly while there is still no connection.
+	const flushPending = useCallback(async () => {
+		if (flushing.current || outboxRef.current.length === 0) return;
+		flushing.current = true;
+		try {
+			const res = await flushOutbox(outboxRef.current, sendItem);
+			if (res.sent.length === 0 && res.dropped.length === 0) return;
+			const done = new Set([...res.sent.map((x) => x.item.id), ...res.dropped.map((x) => x.id)]);
+			// Anything queued while this was running stays.
+			commitOutbox(outboxRef.current.filter((i) => !done.has(i.id)));
+			for (const { item, response } of res.sent) applyCreated(item, response);
+		} finally {
+			flushing.current = false;
+		}
+	}, [sendItem, commitOutbox, applyCreated]);
+
+	// Load the queue after signing in; forget it (in memory) after signing out.
+	useEffect(() => {
+		if (!token) {
+			outboxRef.current = [];
+			setOutbox([]);
+			return;
+		}
+		let cancelled = false;
+		loadOutbox().then((items) => {
+			if (cancelled) return;
+			// Entries queued before the load finished are kept.
+			const known = new Set(items.map((i) => i.id));
+			commitOutbox([...items, ...outboxRef.current.filter((i) => !known.has(i.id))]);
+			flushPending();
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [token, commitOutbox, flushPending]);
+
+	// Keep trying while something waits: every 20 seconds, and when the app comes forward.
+	useEffect(() => {
+		if (!token || outbox.length === 0) return;
+		const timer = setInterval(flushPending, 20_000);
+		const sub = AppState.addEventListener("change", (state) => {
+			if (state === "active") flushPending();
+		});
+		return () => {
+			clearInterval(timer);
+			sub.remove();
+		};
+	}, [token, outbox.length, flushPending]);
+
+	// Logs an entry: sent now if there is a connection, otherwise queued and shown as pending.
+	const createEntry = useCallback(
+		(kind: OutboxKind, at: Date | undefined, value?: number) =>
 			runMutation(async () => {
 				if (!pet) return;
-				const nowIso = (at ?? new Date()).toISOString();
-				const created = await apiFetch<{
-					id: number;
-					fed_at: string;
-					feed_check: boolean;
-				}>("/feedings", {
-					method: "POST",
-					body: { pet_id: pet.id, feed_check: true, fed_at: nowIso },
-				});
-				setFeedings((prev) => [
-					{
-						id: created.id,
-						fed: true,
-						timestamp: Date.parse(created.fed_at ?? nowIso),
-					},
-					...prev,
-				]);
+				const item: OutboxItem = {
+					id: newClientId(),
+					tempId: newTempId(),
+					kind,
+					petId: pet.id,
+					at: (at ?? new Date()).getTime(),
+					value,
+				};
+				try {
+					applyCreated(item, await sendItem(item));
+				} catch (e) {
+					if (!isOfflineError(e)) throw e;
+					commitOutbox([...outboxRef.current, item]);
+				}
 			}),
-		[pet, runMutation],
+		[pet, runMutation, sendItem, applyCreated, commitOutbox],
+	);
+
+	// An entry that never left the phone is edited or removed in the queue, with no request.
+	const editPending = useCallback(
+		(tempId: number, change: Partial<Pick<OutboxItem, "at" | "value">>) => {
+			commitOutbox(outboxRef.current.map((i) => (i.tempId === tempId ? { ...i, ...change } : i)));
+			return Promise.resolve(true);
+		},
+		[commitOutbox],
+	);
+	const removePending = useCallback(
+		(tempId: number) => {
+			commitOutbox(outboxRef.current.filter((i) => i.tempId !== tempId));
+			return Promise.resolve(true);
+		},
+		[commitOutbox],
+	);
+
+	const addFeeding = useCallback((at?: Date) => createEntry("feeding", at), [createEntry]);
+	const addWalk = useCallback((at?: Date) => createEntry("walk", at), [createEntry]);
+	const setBathedToday = useCallback((at?: Date) => createEntry("bath", at), [createEntry]);
+	const setWeightToday = useCallback(
+		(weightKg: number, at?: Date) =>
+			!Number.isFinite(weightKg) || weightKg <= 0
+				? Promise.resolve(false)
+				: createEntry("weight", at, weightKg),
+		[createEntry],
 	);
 
 	const updateFeeding = useCallback(
 		(id: number, at: Date) =>
-			runMutation(async () => {
-				const saved = await apiFetch<ApiFeeding>(`/feedings/${id}`, {
-					method: "PATCH",
-					body: { fed_at: at.toISOString() },
-				});
-				setFeedings((prev) =>
-					prev.map((f) => (f.id === id ? { ...f, timestamp: Date.parse(saved.fed_at) } : f)),
-				);
-			}),
-		[runMutation],
+			isPendingId(id)
+				? editPending(id, { at: at.getTime() })
+				: runMutation(async () => {
+						const saved = await apiFetch<ApiFeeding>(`/feedings/${id}`, {
+							method: "PATCH",
+							body: { fed_at: at.toISOString() },
+						});
+						setFeedings((prev) =>
+							prev.map((f) => (f.id === id ? { ...f, timestamp: Date.parse(saved.fed_at) } : f)),
+						);
+					}),
+		[runMutation, editPending],
 	);
 
 	const removeFeeding = useCallback(
 		(id: number) =>
-			runMutation(async () => {
-				await apiDelete(`/feedings/${id}`);
-				setFeedings((prev) => prev.filter((f) => f.id !== id));
-			}, { silent: true }),
-		[runMutation],
-	);
-
-	const setBathedToday = useCallback(
-		(at?: Date) =>
-			runMutation(async () => {
-				if (!pet) return;
-				const whenIso = (at ?? new Date()).toISOString();
-				const created = await apiFetch<{ id: number; bathed_at: string }>("/baths", {
-					method: "POST",
-					body: { pet_id: pet.id, bathed_at: whenIso },
-				});
-				setBaths((prev) =>
-					[{ id: created.id, timestamp: Date.parse(created.bathed_at ?? whenIso) }, ...prev].sort(
-						(a, b) => b.timestamp - a.timestamp,
+			isPendingId(id)
+				? removePending(id)
+				: runMutation(
+						async () => {
+							await apiDelete(`/feedings/${id}`);
+							setFeedings((prev) => prev.filter((f) => f.id !== id));
+						},
+						{ silent: true },
 					),
-				);
-			}),
-		[pet, runMutation],
-	);
-
-	const updateBath = useCallback(
-		(id: number, at: Date) =>
-			runMutation(async () => {
-				const saved = await apiFetch<ApiBath>(`/baths/${id}`, {
-					method: "PATCH",
-					body: { bathed_at: at.toISOString() },
-				});
-				setBaths((prev) =>
-					prev
-						.map((b) => (b.id === id ? { ...b, timestamp: Date.parse(saved.bathed_at) } : b))
-						.sort((a, b) => b.timestamp - a.timestamp),
-				);
-			}),
-		[runMutation],
-	);
-
-	const removeBath = useCallback(
-		(id: number) =>
-			runMutation(async () => {
-				await apiDelete(`/baths/${id}`);
-				setBaths((prev) => prev.filter((b) => b.id !== id));
-			}, { silent: true }),
-		[runMutation],
-	);
-
-	const addWalk = useCallback(
-		(at?: Date) =>
-			runMutation(async () => {
-				if (!pet) return;
-				const nowIso = (at ?? new Date()).toISOString();
-				const created = await apiFetch<{
-					id: number;
-					walked_at: string;
-					walk_check: boolean;
-				}>("/walks", {
-					method: "POST",
-					body: { pet_id: pet.id, walk_check: true, walked_at: nowIso },
-				});
-				setWalks((prev) => [
-					{
-						id: created.id,
-						walked: true,
-						timestamp: Date.parse(created.walked_at ?? nowIso),
-					},
-					...prev,
-				]);
-			}),
-		[pet, runMutation],
+		[runMutation, removePending],
 	);
 
 	const updateWalk = useCallback(
 		(id: number, at: Date) =>
-			runMutation(async () => {
-				const saved = await apiFetch<ApiWalk>(`/walks/${id}`, {
-					method: "PATCH",
-					body: { walked_at: at.toISOString() },
-				});
-				setWalks((prev) =>
-					prev.map((w) => (w.id === id ? { ...w, timestamp: Date.parse(saved.walked_at) } : w)),
-				);
-			}),
-		[runMutation],
+			isPendingId(id)
+				? editPending(id, { at: at.getTime() })
+				: runMutation(async () => {
+						const saved = await apiFetch<ApiWalk>(`/walks/${id}`, {
+							method: "PATCH",
+							body: { walked_at: at.toISOString() },
+						});
+						setWalks((prev) =>
+							prev.map((w) => (w.id === id ? { ...w, timestamp: Date.parse(saved.walked_at) } : w)),
+						);
+					}),
+		[runMutation, editPending],
 	);
 
 	const removeWalk = useCallback(
 		(id: number) =>
-			runMutation(async () => {
-				await apiDelete(`/walks/${id}`);
-				setWalks((prev) => prev.filter((w) => w.id !== id));
-			}, { silent: true }),
-		[runMutation],
+			isPendingId(id)
+				? removePending(id)
+				: runMutation(
+						async () => {
+							await apiDelete(`/walks/${id}`);
+							setWalks((prev) => prev.filter((w) => w.id !== id));
+						},
+						{ silent: true },
+					),
+		[runMutation, removePending],
 	);
 
-	const setWeightToday = useCallback(
-		(weightKg: number, at?: Date) =>
-			runMutation(async () => {
-				if (!pet || !Number.isFinite(weightKg) || weightKg <= 0) return;
-				const whenIso = (at ?? new Date()).toISOString();
-				const created = await apiFetch<ApiWeight>("/weights", {
-					method: "POST",
-					body: { pet_id: pet.id, value: weightKg, weighed_at: whenIso },
-				});
-				setWeights((prev) =>
-					[
-						{ id: created.id, timestamp: Date.parse(created.weighed_at ?? whenIso), weightKg },
-						...prev,
-					].sort((a, b) => b.timestamp - a.timestamp),
-				);
-			}),
-		[pet, runMutation],
+	const updateBath = useCallback(
+		(id: number, at: Date) =>
+			isPendingId(id)
+				? editPending(id, { at: at.getTime() })
+				: runMutation(async () => {
+						const saved = await apiFetch<ApiBath>(`/baths/${id}`, {
+							method: "PATCH",
+							body: { bathed_at: at.toISOString() },
+						});
+						setBaths((prev) =>
+							prev
+								.map((b) => (b.id === id ? { ...b, timestamp: Date.parse(saved.bathed_at) } : b))
+								.sort((a, b) => b.timestamp - a.timestamp),
+						);
+					}),
+		[runMutation, editPending],
+	);
+
+	const removeBath = useCallback(
+		(id: number) =>
+			isPendingId(id)
+				? removePending(id)
+				: runMutation(
+						async () => {
+							await apiDelete(`/baths/${id}`);
+							setBaths((prev) => prev.filter((b) => b.id !== id));
+						},
+						{ silent: true },
+					),
+		[runMutation, removePending],
 	);
 
 	const updateWeight = useCallback(
 		(id: number, weightKg: number, at: Date) =>
-			runMutation(async () => {
-				if (!Number.isFinite(weightKg) || weightKg <= 0) return;
-				const saved = await apiFetch<ApiWeight>(`/weights/${id}`, {
-					method: "PATCH",
-					body: { value: weightKg, weighed_at: at.toISOString() },
-				});
-				setWeights((prev) =>
-					prev
-						.map((w) =>
-							w.id === id
-								? { ...w, weightKg: Number(saved.value), timestamp: Date.parse(saved.weighed_at) }
-								: w,
-						)
-						.sort((a, b) => b.timestamp - a.timestamp),
-				);
-			}),
-		[runMutation],
+			isPendingId(id)
+				? editPending(id, { at: at.getTime(), value: weightKg })
+				: runMutation(async () => {
+						if (!Number.isFinite(weightKg) || weightKg <= 0) return;
+						const saved = await apiFetch<ApiWeight>(`/weights/${id}`, {
+							method: "PATCH",
+							body: { value: weightKg, weighed_at: at.toISOString() },
+						});
+						setWeights((prev) =>
+							prev
+								.map((w) =>
+									w.id === id
+										? { ...w, weightKg: Number(saved.value), timestamp: Date.parse(saved.weighed_at) }
+										: w,
+								)
+								.sort((a, b) => b.timestamp - a.timestamp),
+						);
+					}),
+		[runMutation, editPending],
 	);
 
 	const removeWeight = useCallback(
 		(id: number) =>
-			runMutation(async () => {
-				await apiDelete(`/weights/${id}`);
-				setWeights((prev) => prev.filter((w) => w.id !== id));
-			}, { silent: true }),
-		[runMutation],
+			isPendingId(id)
+				? removePending(id)
+				: runMutation(
+						async () => {
+							await apiDelete(`/weights/${id}`);
+							setWeights((prev) => prev.filter((w) => w.id !== id));
+						},
+						{ silent: true },
+					),
+		[runMutation, removePending],
 	);
 
 	// Saves the shared bath interval. Optimistic: the schedule updates at once and rolls
@@ -699,21 +799,24 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		if (!pet?.id) return;
 		setRefreshing(true);
 		try {
+			// Entries logged offline go first, so the fresh lists already contain them.
+			await flushPending();
 			await Promise.all([fetchActivities(pet.id), loadPets().catch(() => [])]);
 		} finally {
 			setRefreshing(false);
 		}
-	}, [pet?.id, fetchActivities, loadPets]);
+	}, [pet?.id, fetchActivities, loadPets, flushPending]);
 
 	// Same, without the pull-to-refresh spinner: used when the app returns to the foreground.
 	const sync = useCallback(async () => {
 		if (!pet?.id) return;
 		try {
+			await flushPending();
 			await Promise.all([fetchActivities(pet.id), loadPets().catch(() => [])]);
 		} catch (e) {
 			console.warn("Failed to sync pet data", e);
 		}
-	}, [pet?.id, fetchActivities, loadPets]);
+	}, [pet?.id, fetchActivities, loadPets, flushPending]);
 
 	// ---- Dogs: switch, create, join with a code, leave ----
 	const selectPet = useCallback(
@@ -769,16 +872,43 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		const today = new Date();
 		const timezone = pet?.timezone || deviceTimeZone();
 
-		const feedingsToday = feedings.filter(
+		// What is waiting to be sent shows up like any other entry, marked pending.
+		const waiting = (kind: OutboxKind) =>
+			outbox.filter((i) => i.kind === kind && i.petId === pet?.id);
+		const byNewest = <T extends { timestamp: number }>(rows: T[]) =>
+			rows.sort((a, b) => b.timestamp - a.timestamp);
+		const allFeedings = byNewest([
+			...waiting("feeding").map((i) => ({ id: i.tempId, timestamp: i.at, fed: true, pending: true })),
+			...feedings,
+		]);
+		const allWalks = byNewest([
+			...waiting("walk").map((i) => ({ id: i.tempId, timestamp: i.at, walked: true, pending: true })),
+			...walks,
+		]);
+		const allBaths = byNewest([
+			...waiting("bath").map((i) => ({ id: i.tempId, timestamp: i.at, pending: true })),
+			...baths,
+		]);
+		const allWeights = byNewest([
+			...waiting("weight").map((i) => ({
+				id: i.tempId,
+				timestamp: i.at,
+				weightKg: i.value ?? 0,
+				pending: true,
+			})),
+			...weights,
+		]);
+
+		const feedingsToday = allFeedings.filter(
 			(f) => f.fed && isSameDay(f.timestamp, today.getTime(), timezone),
 		).length;
-		const walksToday = walks.filter(
+		const walksToday = allWalks.filter(
 			(w) => w.walked && isSameDay(w.timestamp, today.getTime(), timezone),
 		).length;
 		const hasFedToday = feedingsToday > 0;
 		const hasWalkedToday = walksToday > 0;
 
-		const lastBathTs = getLatestTimestamp(baths);
+		const lastBathTs = getLatestTimestamp(allBaths);
 		const lastBathAt = lastBathTs ? new Date(lastBathTs) : null;
 
 		const bathIntervalDays = pet?.bath_interval_days ?? DEFAULT_BATH_INTERVAL_DAYS;
@@ -795,9 +925,9 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			calendarDay(today.getTime(), timezone) >=
 			calendarDay(nextBathDueAt.getTime(), timezone);
 
-		const latestWeightTs = getLatestTimestamp(weights);
+		const latestWeightTs = getLatestTimestamp(allWeights);
 		const currentWeightKg = latestWeightTs
-			? (weights.find((w) => w.timestamp === latestWeightTs)?.weightKg ?? null)
+			? (allWeights.find((w) => w.timestamp === latestWeightTs)?.weightKg ?? null)
 			: null;
 
 		return {
@@ -813,10 +943,10 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			timezone,
 			name: pet?.name ?? "",
 			breed: pet?.breed ?? "",
-			feedings,
-			baths,
-			walks,
-			weights,
+			feedings: allFeedings,
+			baths: allBaths,
+			walks: allWalks,
+			weights: allWeights,
 			hasFedToday,
 			hasWalkedToday,
 			lastBathAt,
@@ -841,6 +971,8 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			updateWeight,
 			removeWeight,
 			busy,
+			pendingCount: outbox.length,
+			flushPending,
 
 			// pull-to-refresh
 			refresh,
@@ -865,6 +997,8 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		feedings,
 		walks,
 		weights,
+		outbox,
+		flushPending,
 		addFeeding,
 		updateFeeding,
 		removeFeeding,

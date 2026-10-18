@@ -12,11 +12,13 @@ import { useFreshIds, useMotion } from "../motion";
 import { Text } from "./themed";
 import AppButton from "./AppButton";
 import EntryTimeModal from "./EntryTimeModal";
+import PendingNote from "./PendingNote";
 import TickText from "./TickText";
 import { useToast } from "./Toast";
 import { Section, Surface } from "./ui";
 
-type Entry = { id: number; timestamp: number };
+// `pending`: logged offline, not yet sent.
+type Entry = { id: number; timestamp: number; pending?: boolean };
 
 type Props = {
 	title: string;
@@ -107,6 +109,7 @@ export default function ActivityLogScreen({
 					<Text variant="largeTitle" style={styles.title}>
 						{title}
 					</Text>
+					<PendingNote />
 
 					{/* The count is the point of this page, so it is the biggest thing on it. */}
 					<Surface style={styles.summary}>
@@ -152,6 +155,15 @@ export default function ActivityLogScreen({
 						<Text variant="body" style={type.numeric}>
 							{formatWhen(item.timestamp, timezone, locale, labels)}
 						</Text>
+						{item.pending && (
+							<Ionicons
+								name="cloud-offline-outline"
+								size={16}
+								color={c.accentText}
+								style={styles.pendingIcon}
+								accessibilityLabel={t("pending_row")}
+							/>
+						)}
 					</Pressable>
 					<Pressable
 						onPress={() => remove(item)}
@@ -218,7 +230,8 @@ const makeStyles = (c: Colors) =>
 			borderBottomRightRadius: radius.lg,
 			...smooth,
 		},
-		when: { flex: 1, minHeight: 56, justifyContent: "center" },
+		when: { flex: 1, minHeight: 56, flexDirection: "row", alignItems: "center" },
+		pendingIcon: { marginLeft: space[2] },
 		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 		separatorWrap: { backgroundColor: c.surface },
 		separator: {

@@ -168,7 +168,16 @@ export default function WeightScreen() {
 								>
 									<Text variant="body" style={type.numeric}>
 										{w.weightKg.toFixed(1)} kg
+										{w.pending ? "  " : ""}
 									</Text>
+									{w.pending && (
+										<Ionicons
+											name="cloud-offline-outline"
+											size={16}
+											color={c.accentText}
+											accessibilityLabel={t("pending_row")}
+										/>
+									)}
 									<Text variant="sub" tone="muted">
 										{formatDay(w.timestamp, timezone, locale, labels)}
 									</Text>

@@ -205,6 +205,15 @@ export default function BathsScreen() {
 									<Text variant="body" style={type.numeric}>
 										{formatDay(b.timestamp, timezone, locale, labels)}
 									</Text>
+									{b.pending && (
+										<Ionicons
+											name="cloud-offline-outline"
+											size={16}
+											color={c.accentText}
+											style={styles.pendingIcon}
+											accessibilityLabel={t("pending_row")}
+										/>
+									)}
 								</Pressable>
 								<Pressable
 									onPress={() => remove(b)}
@@ -261,7 +270,8 @@ const makeStyles = (c: Colors) =>
 			paddingRight: space[1],
 			backgroundColor: c.surface,
 		},
-		when: { flex: 1, minHeight: 52, justifyContent: "center" },
+		when: { flex: 1, minHeight: 52, flexDirection: "row", alignItems: "center" },
+		pendingIcon: { marginLeft: space[2] },
 		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 		bars: {
 			flexDirection: "row",

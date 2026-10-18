@@ -2,6 +2,7 @@ import { Children, Fragment, useCallback, useEffect, useMemo, useRef, useState, 
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { css, useReducedMotion } from "react-native-reanimated";
 import { EASE_OUT_CSS } from "../motion";
+import PendingNote from "./PendingNote";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { radius, smooth, space, useTheme, type Colors } from "../theme";
@@ -152,6 +153,7 @@ export function Screen({ title, children, refreshing, onRefresh }: ScreenProps) 
 			<Text variant="largeTitle" style={styles.title}>
 				{title}
 			</Text>
+			<PendingNote />
 			{children}
 		</ScrollView>
 	);
