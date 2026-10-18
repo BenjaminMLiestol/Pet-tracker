@@ -3,27 +3,30 @@
 appId: com.benjaminliestol.pettracker
 ---
 - launchApp
-# Someone may be signed in from before (a person, or a test run whose account is gone by now and
-# which the app signs out by itself a moment later). Sign out if we still can, then wait for the
-# login screen whichever way it arrives.
-- runFlow:
-    when:
-      visible:
-        id: "tab-home"
+# Someone may be signed in from before (you, or a test run whose account is gone by now and which
+# the app signs out by itself a moment later). The app takes a few seconds to show either screen,
+# so: sign out if the tabs are there, wait for the login screen, and if it hasn't come, look again.
+- retry:
+    maxRetries: 3
     commands:
-      - tapOn:
-          id: "tab-profile"
-          optional: true
-      - scrollUntilVisible:
-          element: "Logg ut|Log out"
-          direction: DOWN
-          optional: true
-      - tapOn:
-          text: "Logg ut|Log out"
-          optional: true
-- extendedWaitUntil:
-    visible: "Velkommen tilbake|Welcome back"
-    timeout: 20000
+      - runFlow:
+          when:
+            visible:
+              id: "tab-home"
+          commands:
+            - tapOn:
+                id: "tab-profile"
+                optional: true
+            - scrollUntilVisible:
+                element: "Logg ut|Log out"
+                direction: DOWN
+                optional: true
+            - tapOn:
+                text: "Logg ut|Log out"
+                optional: true
+      - extendedWaitUntil:
+          visible: "Velkommen tilbake|Welcome back"
+          timeout: 8000
 - tapOn:
     id: "email"
 - inputText: ${E2E_EMAIL}
