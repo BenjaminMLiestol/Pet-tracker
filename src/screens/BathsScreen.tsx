@@ -5,6 +5,8 @@ import Animated, { LayoutAnimationConfig } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { usePet, type BathRecord } from "../context/PetContext";
+import { useAuth } from "../context/AuthContext";
+import { whoLabel } from "../utils/who";
 import AppButton from "../components/AppButton";
 import EntryTimeModal from "../components/EntryTimeModal";
 import { Text } from "../components/themed";
@@ -33,7 +35,9 @@ export default function BathsScreen() {
 		refresh,
 		refreshing,
 		timezone,
+		owners,
 	} = usePet();
+	const { user } = useAuth();
 	const toast = useToast();
 	// The time sheet logs an earlier bath (editing === null) or moves one.
 	const [sheet, setSheet] = useState<{ editing: BathRecord | null } | null>(null);
@@ -205,6 +209,11 @@ export default function BathsScreen() {
 									<Text variant="body" style={type.numeric}>
 										{formatDay(b.timestamp, timezone, locale, labels)}
 									</Text>
+									{whoLabel(b.userId, owners, user?.id) !== "" && (
+										<Text variant="sub" tone="muted" style={styles.who}>
+											{whoLabel(b.userId, owners, user?.id)}
+										</Text>
+									)}
 									{b.pending && (
 										<Ionicons
 											name="cloud-offline-outline"
@@ -272,6 +281,7 @@ const makeStyles = (c: Colors) =>
 		},
 		when: { flex: 1, minHeight: 52, flexDirection: "row", alignItems: "center" },
 		pendingIcon: { marginLeft: space[2] },
+		who: { marginLeft: space[2] },
 		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 		bars: {
 			flexDirection: "row",

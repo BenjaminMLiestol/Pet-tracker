@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePet } from "../context/PetContext";
+import { useAuth } from "../context/AuthContext";
+import { whoLabel } from "../utils/who";
 import { radius, smooth, space, type, useTheme, type Colors } from "../theme";
 import { formatWhen } from "../utils/dates";
 import { useFreshIds, useMotion } from "../motion";
@@ -18,7 +20,7 @@ import { useToast } from "./Toast";
 import { Section, Surface } from "./ui";
 
 // `pending`: logged offline, not yet sent.
-type Entry = { id: number; timestamp: number; pending?: boolean };
+type Entry = { id: number; timestamp: number; userId?: number; pending?: boolean };
 
 type Props = {
 	title: string;
@@ -51,7 +53,8 @@ export default function ActivityLogScreen({
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { name, busy, refresh, refreshing, timezone } = usePet();
+	const { name, busy, refresh, refreshing, timezone, owners } = usePet();
+	const { user } = useAuth();
 	const isFocused = useIsFocused();
 	const toast = useToast();
 	const insets = useSafeAreaInsets();
@@ -155,6 +158,11 @@ export default function ActivityLogScreen({
 						<Text variant="body" style={type.numeric}>
 							{formatWhen(item.timestamp, timezone, locale, labels)}
 						</Text>
+						{whoLabel(item.userId, owners, user?.id) !== "" && (
+							<Text variant="sub" tone="muted" style={styles.who}>
+								{whoLabel(item.userId, owners, user?.id)}
+							</Text>
+						)}
 						{item.pending && (
 							<Ionicons
 								name="cloud-offline-outline"
@@ -232,6 +240,7 @@ const makeStyles = (c: Colors) =>
 		},
 		when: { flex: 1, minHeight: 56, flexDirection: "row", alignItems: "center" },
 		pendingIcon: { marginLeft: space[2] },
+		who: { marginLeft: space[2] },
 		trash: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 		separatorWrap: { backgroundColor: c.surface },
 		separator: {

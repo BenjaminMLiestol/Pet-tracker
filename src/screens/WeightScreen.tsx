@@ -6,6 +6,8 @@ import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { usePet, type WeightRecord } from "../context/PetContext";
+import { useAuth } from "../context/AuthContext";
+import { whoLabel } from "../utils/who";
 import WeightChart from "../components/WeightChart";
 import AppButton from "../components/AppButton";
 import EntryTimeModal from "../components/EntryTimeModal";
@@ -30,7 +32,9 @@ export default function WeightScreen() {
 		refresh,
 		refreshing,
 		timezone,
+		owners,
 	} = usePet();
+	const { user } = useAuth();
 	const toast = useToast();
 	// The sheet logs a weigh-in for another day (editing === null) or edits one.
 	const [sheet, setSheet] = useState<{ editing: WeightRecord | null } | null>(null);
@@ -179,7 +183,9 @@ export default function WeightScreen() {
 										/>
 									)}
 									<Text variant="sub" tone="muted">
-										{formatDay(w.timestamp, timezone, locale, labels)}
+										{[whoLabel(w.userId, owners, user?.id), formatDay(w.timestamp, timezone, locale, labels)]
+											.filter(Boolean)
+											.join(" · ")}
 									</Text>
 								</Pressable>
 								<Pressable

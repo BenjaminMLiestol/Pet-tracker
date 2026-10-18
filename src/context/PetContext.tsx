@@ -31,10 +31,10 @@ import { useAuth } from "./AuthContext";
 
 // ===== Types expected by the rest of the app =====
 // `pending`: saved on the phone, not yet on the server (logged without a connection).
-export type FeedingRecord = { id: number; timestamp: number; fed: boolean; pending?: boolean };
-export type BathRecord = { id: number; timestamp: number; pending?: boolean };
-export type WalkRecord = { id: number; timestamp: number; walked: boolean; pending?: boolean };
-export type WeightRecord = { id: number; timestamp: number; weightKg: number; pending?: boolean };
+export type FeedingRecord = { id: number; timestamp: number; fed: boolean; userId?: number; pending?: boolean };
+export type BathRecord = { id: number; timestamp: number; userId?: number; pending?: boolean };
+export type WalkRecord = { id: number; timestamp: number; walked: boolean; userId?: number; pending?: boolean };
+export type WeightRecord = { id: number; timestamp: number; weightKg: number; userId?: number; pending?: boolean };
 
 export type PetContextValue = {
 	// All the dogs this person looks after, which one is active, and the loading state of that list.
@@ -184,11 +184,13 @@ const mapFeeding = (f: ApiFeeding): FeedingRecord => ({
 	id: f.id,
 	timestamp: Date.parse(f.fed_at),
 	fed: !!f.feed_check,
+	userId: f.user_id,
 });
 const mapWalk = (w: ApiWalk): WalkRecord => ({
 	id: w.id,
 	timestamp: Date.parse(w.walked_at),
 	walked: !!w.walk_check,
+	userId: w.user_id,
 });
 
 // Append a loaded page, dropping rows we already have, newest first.
@@ -324,7 +326,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 
 		setBaths(
 			unwrapList(bathsRaw)
-				.map((b) => ({ id: b.id, timestamp: Date.parse(b.bathed_at) }))
+				.map((b) => ({ id: b.id, timestamp: Date.parse(b.bathed_at), userId: b.user_id }))
 				.sort((a, b) => b.timestamp - a.timestamp),
 		);
 
@@ -334,6 +336,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 					id: w.id,
 					timestamp: Date.parse(w.weighed_at),
 					weightKg: Number(w.value),
+					userId: w.user_id,
 				}))
 				.sort((a, b) => b.timestamp - a.timestamp),
 		);
@@ -530,13 +533,13 @@ export function PetProvider({ children }: { children: ReactNode }) {
 				break;
 			case "bath": {
 				const b = response as ApiBath;
-				setBaths((prev) => mergeById(prev, [{ id: b.id, timestamp: Date.parse(b.bathed_at) }]));
+				setBaths((prev) => mergeById(prev, [{ id: b.id, timestamp: Date.parse(b.bathed_at), userId: b.user_id }]));
 				break;
 			}
 			case "weight": {
 				const w = response as ApiWeight;
 				setWeights((prev) =>
-					mergeById(prev, [{ id: w.id, timestamp: Date.parse(w.weighed_at), weightKg: Number(w.value) }]),
+					mergeById(prev, [{ id: w.id, timestamp: Date.parse(w.weighed_at), weightKg: Number(w.value), userId: w.user_id }]),
 				);
 				break;
 			}
@@ -878,15 +881,15 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		const byNewest = <T extends { timestamp: number }>(rows: T[]) =>
 			rows.sort((a, b) => b.timestamp - a.timestamp);
 		const allFeedings = byNewest([
-			...waiting("feeding").map((i) => ({ id: i.tempId, timestamp: i.at, fed: true, pending: true })),
+			...waiting("feeding").map((i) => ({ id: i.tempId, timestamp: i.at, fed: true, userId: user?.id, pending: true })),
 			...feedings,
 		]);
 		const allWalks = byNewest([
-			...waiting("walk").map((i) => ({ id: i.tempId, timestamp: i.at, walked: true, pending: true })),
+			...waiting("walk").map((i) => ({ id: i.tempId, timestamp: i.at, walked: true, userId: user?.id, pending: true })),
 			...walks,
 		]);
 		const allBaths = byNewest([
-			...waiting("bath").map((i) => ({ id: i.tempId, timestamp: i.at, pending: true })),
+			...waiting("bath").map((i) => ({ id: i.tempId, timestamp: i.at, userId: user?.id, pending: true })),
 			...baths,
 		]);
 		const allWeights = byNewest([
@@ -894,6 +897,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 				id: i.tempId,
 				timestamp: i.at,
 				weightKg: i.value ?? 0,
+				userId: user?.id,
 				pending: true,
 			})),
 			...weights,
@@ -998,6 +1002,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		walks,
 		weights,
 		outbox,
+		user?.id,
 		flushPending,
 		addFeeding,
 		updateFeeding,
