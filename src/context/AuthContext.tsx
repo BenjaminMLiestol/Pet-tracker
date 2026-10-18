@@ -2,8 +2,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiFetch, registerUnauthorizedHandler } from '../api/client';
+import { ApiError, apiFetch, registerUnauthorizedHandler } from '../api/client';
 import { unregisterFromPush } from '../api/push';
+import { clearFaceLogin, getFaceLoginEmail, readFaceLogin, saveFaceLogin } from '../api/faceLogin';
+import i18n from '../i18n';
 import { refreshSession, resetSessionRefresh } from '../api/session';
 import { clearUserCache } from '../api/userCache';
 import { clearToken, getToken, setToken as saveToken } from '../api/tokenStorage';
@@ -55,6 +57,20 @@ type AuthState = {
   logout: () => Promise<void>;
   // Signs out every phone and session of this account.
   logoutEverywhere: () => Promise<boolean>;
+  // Why the last session ended: 'expired' (the 7-day login ran out or was revoked) or
+  // 'logout' (the person chose to). The login screen only offers Face ID on its own after
+  // an expiry.
+  endedBy: 'expired' | 'logout' | null;
+  // Email of the account whose password is saved for Face ID login, if any.
+  faceLoginEmail: string | null;
+  // Asks for Face ID and signs in with the saved password. Resolves false when cancelled;
+  // throws a message safe to show when the saved password no longer works.
+  loginWithFaceId: () => Promise<boolean>;
+  // Saves a password for Face ID login after checking it with the server.
+  enableFaceLogin: (password: string) => Promise<void>;
+  // Saves a password just typed at sign-in (already known to be right).
+  rememberFaceLogin: (email: string, password: string) => Promise<void>;
+  disableFaceLogin: () => Promise<void>;
   // Saves personal settings. Optimistic; resolves true when the server accepted them.
   updateSettings: (patch: SettingsPatch) => Promise<boolean>;
 };
@@ -65,10 +81,17 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isBootstrapping, setBootstrapping] = useState(true);
+  const [endedBy, setEndedBy] = useState<'expired' | 'logout' | null>(null);
+  const [faceLoginEmail, setFaceLoginEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    getFaceLoginEmail().then(setFaceLoginEmail);
+  }, []);
 
   // Local sign-out: reset state first so nothing re-persists, then wipe the previous
   // user's cached data. Never talks to the server (the login may already be dead).
-  const endSession = useCallback(async () => {
+  const endSession = useCallback(async (reason: 'expired' | 'logout' = 'logout') => {
+    setEndedBy(reason);
     setToken(null);
     setUser(null);
     await Promise.all([clearToken(), AsyncStorage.removeItem('authUser'), clearUserCache()]);
@@ -104,7 +127,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   // /auth/logout: that would 401 too and loop.
   useEffect(() => {
     registerUnauthorizedHandler(() => {
-      endSession();
+      endSession('expired');
     });
   }, [endSession]);
 
@@ -173,6 +196,42 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     })();
   }, []);
 
+  const loginWithFaceId = useCallback(async () => {
+    const creds = await readFaceLogin(i18n.t('face_prompt'));
+    if (!creds) return false;
+    try {
+      await login(creds.email, creds.password);
+      return true;
+    } catch (e) {
+      // The password was changed elsewhere: the saved one is useless now.
+      if (e instanceof ApiError && e.status === 401) {
+        await clearFaceLogin();
+        setFaceLoginEmail(null);
+        throw new Error(i18n.t('face_outdated'));
+      }
+      throw e;
+    }
+  }, [login]);
+
+  const rememberFaceLogin = useCallback(async (email: string, password: string) => {
+    await saveFaceLogin({ email, password }, i18n.t('face_prompt'));
+    setFaceLoginEmail(email);
+  }, []);
+
+  const enableFaceLogin = useCallback(
+    async (password: string) => {
+      if (!user) return;
+      await apiFetch('/auth/confirm-password', { method: 'POST', body: { password } });
+      await rememberFaceLogin(user.email, password);
+    },
+    [user, rememberFaceLogin]
+  );
+
+  const disableFaceLogin = useCallback(async () => {
+    await clearFaceLogin();
+    setFaceLoginEmail(null);
+  }, []);
+
   const updateSettings = useCallback(
     async (patch: SettingsPatch): Promise<boolean> => {
       const before = user;
@@ -191,8 +250,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   );
 
   const value = useMemo(
-    () => ({ user, token, isBootstrapping, login, register, logout, logoutEverywhere, updateSettings }),
-    [user, token, isBootstrapping, login, register, logout, logoutEverywhere, updateSettings]
+    () => ({ user, token, isBootstrapping, login, register, logout, logoutEverywhere, endedBy, faceLoginEmail, loginWithFaceId, enableFaceLogin, rememberFaceLogin, disableFaceLogin, updateSettings }),
+    [user, token, isBootstrapping, login, register, logout, logoutEverywhere, endedBy, faceLoginEmail, loginWithFaceId, enableFaceLogin, rememberFaceLogin, disableFaceLogin, updateSettings]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

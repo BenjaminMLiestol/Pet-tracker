@@ -27,8 +27,6 @@ import { useTheme, type Colors } from "./src/theme";
 import { Text } from "./src/components/themed";
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import PushSync from './src/context/PushSync';
-import { AppLockProvider } from './src/context/AppLockContext';
-import LockScreen from './src/components/LockScreen';
 import { ToastProvider } from './src/components/Toast';
 
 function useNavigationTheme(): Theme {
@@ -63,7 +61,6 @@ function ThemedNavigation({ children }: { children: React.ReactNode }) {
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
       {children}
       <StatusBarScrim />
-      <LockScreen />
     </NavigationContainer>
   );
 }
@@ -178,7 +175,6 @@ export default function App() {
     <SafeAreaProvider>
       <ToastProvider>
         <AuthProvider>
-         <AppLockProvider>
           <PetProvider>
             <PushSync />
             <RemindersProvider>
@@ -189,7 +185,6 @@ export default function App() {
               </CareProvider>
             </RemindersProvider>
           </PetProvider>
-         </AppLockProvider>
         </AuthProvider>
       </ToastProvider>
     </SafeAreaProvider>

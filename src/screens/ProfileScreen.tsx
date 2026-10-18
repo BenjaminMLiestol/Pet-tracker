@@ -5,7 +5,8 @@ import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
 import { reminderTimes, useAuth } from "../context/AuthContext";
-import { useAppLock } from "../context/AppLockContext";
+import { useBiometricInfo } from "../api/faceLogin";
+import PasswordConfirmModal from "../components/PasswordConfirmModal";
 import { usePet } from "../context/PetContext";
 import { useReminders } from "../context/RemindersContext";
 import LanguageSwitcher from "../components/LanguageSwitcher";
@@ -26,7 +27,15 @@ export default function ProfileScreen() {
 	const c = useTheme();
 	const styles = useMemo(() => makeStyles(c), [c]);
 	const { t, i18n } = useTranslation();
-	const { user, logout, logoutEverywhere, updateSettings } = useAuth();
+	const {
+		user,
+		logout,
+		logoutEverywhere,
+		updateSettings,
+		faceLoginEmail,
+		enableFaceLogin,
+		disableFaceLogin,
+	} = useAuth();
 	const {
 		name: petName,
 		breed,
@@ -48,7 +57,9 @@ export default function ProfileScreen() {
 	const m = useMotion();
 	const isFocused = useIsFocused();
 	const { enabled: remindersOn, setEnabled: setRemindersOn } = useReminders();
-	const lock = useAppLock();
+	const bio = useBiometricInfo();
+	const [faceSetupOpen, setFaceSetupOpen] = useState(false);
+	const methodName = bio.kind === "touch" ? "Touch ID" : bio.kind === "face" ? "Face ID" : t("face_setting_other");
 
 	const onToggleReminders = async (next: boolean) => {
 		const ok = await setRemindersOn(next);
@@ -294,24 +305,25 @@ export default function ProfileScreen() {
 				</Text>
 			</Section>
 
-			{lock.available && (
-				<Section label={t("lock_section")}>
+			{bio.available && (
+				<Section label={t("face_section")}>
 					<Group>
 						<Row
-							title={t(`lock_setting_${lock.kind}`)}
+							title={t(`face_setting_${bio.kind}`)}
 							right={
 								<Switch
-									value={lock.enabled}
-									onValueChange={async (next) => {
-										if (!(await lock.setEnabled(next))) toast.show(t("lock_failed"), "error");
+									value={faceLoginEmail !== null}
+									onValueChange={(next) => {
+										if (next) setFaceSetupOpen(true);
+										else disableFaceLogin();
 									}}
-									accessibilityLabel={t(`lock_setting_${lock.kind}`)}
+									accessibilityLabel={t(`face_setting_${bio.kind}`)}
 								/>
 							}
 						/>
 					</Group>
 					<Text variant="caption" tone="muted" style={styles.hint}>
-						{t("lock_hint")}
+						{t("face_hint")}
 					</Text>
 				</Section>
 			)}
@@ -348,6 +360,14 @@ export default function ProfileScreen() {
 					}
 				/>
 			</View>
+			<PasswordConfirmModal
+				visible={faceSetupOpen}
+				title={t("face_setup_title")}
+				body={t("face_setup_body", { method: methodName })}
+				submitLabel={t("face_setup_submit")}
+				onClose={() => setFaceSetupOpen(false)}
+				onSubmit={enableFaceLogin}
+			/>
 			<DogManagerModal visible={dogsOpen} onClose={() => setDogsOpen(false)} />
 			<InviteModal visible={inviteOpen} onClose={() => setInviteOpen(false)} />
 		</Screen>

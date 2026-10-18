@@ -25,16 +25,3 @@ export async function getBiometricInfo(): Promise<BiometricInfo> {
 		return { available: false, kind: "other" };
 	}
 }
-
-/** Asks for Face ID / Touch ID, falling back to the device passcode. Resolves true on success. */
-export async function authenticate(opts: { prompt: string; cancel: string }): Promise<boolean> {
-	try {
-		const res = await LocalAuthentication.authenticateAsync({
-			promptMessage: opts.prompt,
-			cancelLabel: opts.cancel,
-		});
-		return res.success;
-	} catch {
-		return false;
-	}
-}
