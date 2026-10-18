@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, Switch, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
@@ -20,6 +20,7 @@ import { useToast } from "../components/Toast";
 import { Group, PressRow, Row, Screen, Section, Stepper, Surface } from "../components/ui";
 import { useMotion } from "../motion";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit";
+import { useExport } from "../hooks/useExport";
 import { formatTime, parseTime, timeToDate } from "../utils/reminders";
 import { space, type, useTheme, type Colors } from "../theme";
 
@@ -57,6 +58,10 @@ export default function ProfileScreen() {
 	const m = useMotion();
 	const isFocused = useIsFocused();
 	const { enabled: remindersOn, setEnabled: setRemindersOn } = useReminders();
+	const { busy: exporting, exportPdf, exportCsv } = useExport();
+	const exportAs = async (run: () => Promise<boolean>) => {
+		if (!(await run())) toast.show(t("export_failed"), "error");
+	};
 	const bio = useBiometricInfo();
 	const [faceSetupOpen, setFaceSetupOpen] = useState(false);
 	const methodName = bio.kind === "touch" ? "Touch ID" : bio.kind === "face" ? "Face ID" : t("face_setting_other");
@@ -302,6 +307,36 @@ export default function ProfileScreen() {
 				</Group>
 				<Text variant="caption" tone="muted" style={styles.hint}>
 					{t("reminders_hint")}
+				</Text>
+			</Section>
+
+			<Section label={t("export_section")}>
+				<Group>
+					<PressRow
+						title={t("export_pdf")}
+						right={
+							exporting === "pdf" ? (
+								<ActivityIndicator color={c.textMuted} />
+							) : (
+								<Ionicons name="document-text-outline" size={20} color={c.text} />
+							)
+						}
+						onPress={() => !exporting && exportAs(exportPdf)}
+					/>
+					<PressRow
+						title={t("export_csv")}
+						right={
+							exporting === "csv" ? (
+								<ActivityIndicator color={c.textMuted} />
+							) : (
+								<Ionicons name="grid-outline" size={20} color={c.text} />
+							)
+						}
+						onPress={() => !exporting && exportAs(exportCsv)}
+					/>
+				</Group>
+				<Text variant="caption" tone="muted" style={styles.hint}>
+					{t("export_hint")}
 				</Text>
 			</Section>
 

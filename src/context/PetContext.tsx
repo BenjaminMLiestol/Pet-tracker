@@ -54,6 +54,8 @@ export type PetContextValue = {
 	timezone: string;
 	name: string;
 	breed: string;
+	// "YYYY-MM-DD", or null when not set.
+	birthday: string | null;
 	feedings: FeedingRecord[];
 	baths: BathRecord[];
 	walks: WalkRecord[];
@@ -947,6 +949,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			timezone,
 			name: pet?.name ?? "",
 			breed: pet?.breed ?? "",
+			birthday: pet?.date_of_birth ?? null,
 			feedings: allFeedings,
 			baths: allBaths,
 			walks: allWalks,
