@@ -1,7 +1,7 @@
 // App.tsx (updated)
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, LogBox } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -64,10 +64,6 @@ function ThemedNavigation({ children }: { children: React.ReactNode }) {
     </NavigationContainer>
   );
 }
-
-// React Navigation's own tab bar still calls navigate() with the old object form, and the
-// dev-only warning bar it triggers sits over the tab bar. Not ours to fix; hide just this one.
-LogBox.ignoreLogs(["Passing an object as the argument to 'navigate' is deprecated"]);
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
