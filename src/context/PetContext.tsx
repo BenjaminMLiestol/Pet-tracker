@@ -83,6 +83,8 @@ export type PetContextValue = {
 	// Days between baths (shared by everyone who owns the pet; default 30).
 	bathIntervalDays: number;
 	setBathInterval: (days: number) => Promise<boolean>;
+	// Saves the dog's birthday ("YYYY-MM-DD"), or clears it with null. Resolves true when saved.
+	setBirthday: (date: string | null) => Promise<boolean>;
 	// Daily goals (shared by everyone who owns the dog): feedings 1, walks 2 by default.
 	feedingsPerDay: number;
 	walksPerDay: number;
@@ -842,6 +844,26 @@ export function PetProvider({ children }: { children: ReactNode }) {
 		[pet],
 	);
 
+	const setBirthday = useCallback(
+		async (date: string | null): Promise<boolean> => {
+			if (!pet) return false;
+			const previous = pet.date_of_birth ?? null;
+			setPet((p) => (p ? { ...p, date_of_birth: date } : p));
+			try {
+				const saved = await apiFetch<ApiPet>(`/pets/${pet.id}`, {
+					method: "PATCH",
+					body: { date_of_birth: date },
+				});
+				setPet((p) => (p && p.id === saved.id ? { ...p, ...saved } : p));
+				return true;
+			} catch {
+				setPet((p) => (p && p.id === pet.id ? { ...p, date_of_birth: previous } : p));
+				return false;
+			}
+		},
+		[pet],
+	);
+
 	// Same as the bath interval: optimistic, rolled back if the server refuses.
 	const setDailyGoal = useCallback(
 		async (kind: GoalKind, perDay: number): Promise<boolean> => {
@@ -1062,6 +1084,7 @@ export function PetProvider({ children }: { children: ReactNode }) {
 			name: pet?.name ?? "",
 			breed: pet?.breed ?? "",
 			birthday: pet?.date_of_birth ?? null,
+			setBirthday,
 			feedings: allFeedings,
 			baths: allBaths,
 			walks: allWalks,

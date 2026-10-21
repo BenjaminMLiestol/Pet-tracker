@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { describeError } from "../api/errors";
 import { usePet } from "../context/PetContext";
+import { toDateString as localDate } from "../utils/birthday";
 import { deviceTimeZone } from "../utils/dates";
 import { CODE_LENGTH, formatCode, looksLikeCode, normalizeCode } from "../utils/inviteCode";
 import { radius, smooth, space, type, useTheme, type Colors } from "../theme";
@@ -283,13 +284,6 @@ export default function DogManagerModal({ visible, initialMode = "list", onClose
 			</KeyboardAvoidingView>
 		</Modal>
 	);
-}
-
-// The calendar date the person picked, as YYYY-MM-DD (not shifted to UTC).
-function localDate(d: Date): string {
-	const mm = String(d.getMonth() + 1).padStart(2, "0");
-	const dd = String(d.getDate()).padStart(2, "0");
-	return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 const makeStyles = (c: Colors) =>

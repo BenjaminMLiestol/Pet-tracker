@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useIsFocused } from "@react-navigation/native";
+import { isBirthdayToday } from "../utils/birthday";
 import { daysBetween } from "../utils/dates";
 import { usePet } from "../context/PetContext";
 import { useAuth } from "../context/AuthContext";
@@ -32,6 +33,7 @@ export default function HomeScreen() {
 		petId,
 		name,
 		breed,
+		birthday,
 		feedingsToday,
 		walksToday,
 		feedingsPerDay,
@@ -47,6 +49,7 @@ export default function HomeScreen() {
 	const displayName = user?.first_name?.trim() || user?.email || t("friend");
 	const supply = foodSupply(food, Date.now(), timezone);
 	const photo = useDogPhoto(petId);
+	const isBirthday = isBirthdayToday(new Date(), birthday);
 
 	const df = new Intl.DateTimeFormat(i18n.language === "nb" ? "nb-NO" : "en-US", {
 		day: "numeric",
@@ -86,6 +89,11 @@ export default function HomeScreen() {
 						{breed ? (
 							<Text variant="sub" style={styles.heroBreed} numberOfLines={1}>
 								{breed}
+							</Text>
+						) : null}
+						{isBirthday ? (
+							<Text variant="sub" style={styles.heroBirthday} numberOfLines={2}>
+								{t("birthday_greeting", { name })}
 							</Text>
 						) : null}
 					</View>
@@ -260,6 +268,7 @@ const makeStyles = (c: Colors & { isDark: boolean }) =>
 		},
 		heroText: { flexShrink: 1, paddingBottom: space[5], alignSelf: "flex-start" },
 		heroName: { color: c.isDark ? c.text : c.accentText, flexShrink: 1 },
+		heroBirthday: { color: c.isDark ? c.text : c.accentText, marginTop: space[1], fontWeight: "600" },
 		heroBreed: { color: c.textSecondary, marginTop: 2 },
 		heroImage: { width: 176, height: 176 },
 		heroPhoto: { width: 150, height: 150, borderRadius: radius.lg, marginBottom: space[4], marginRight: space[1], ...smooth },

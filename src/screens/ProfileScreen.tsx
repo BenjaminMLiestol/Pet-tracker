@@ -15,6 +15,7 @@ import { Text } from "../components/themed";
 import DateField from "../components/DateField";
 import DogManagerModal from "../components/DogManagerModal";
 import InviteModal from "../components/InviteModal";
+import { parseBirthday, toDateString } from "../utils/birthday";
 import { removeOwner } from "../api/sharing";
 import { useToast } from "../components/Toast";
 import { Group, PressRow, Row, Screen, Section, Stepper, Surface } from "../components/ui";
@@ -46,6 +47,8 @@ export default function ProfileScreen() {
 		lastBathAt,
 		bathIntervalDays,
 		setBathInterval,
+		birthday,
+		setBirthday,
 		feedingsPerDay,
 		walksPerDay,
 		setDailyGoal,
@@ -209,6 +212,11 @@ export default function ProfileScreen() {
 			}).format(lastBathAt)
 		: "—";
 
+	const birthdayParts = parseBirthday(birthday);
+	const birthdayDate = birthdayParts ? new Date(birthdayParts.year, birthdayParts.month - 1, birthdayParts.day) : new Date();
+	const saveBirthday = async (date: Date | null) =>
+		report(await setBirthday(date ? toDateString(date) : null));
+
 	const value = (text: string) => (
 		<Text variant="body" tone="muted" style={styles.value} numberOfLines={1}>
 			{text}
@@ -228,6 +236,24 @@ export default function ProfileScreen() {
 				<Group>
 					<Row title={t("name")} right={value(petName || "—")} />
 					<Row title={t("breed")} right={value(breed || "—")} />
+					<Row
+						title={t("dog_birthday_set")}
+						right={
+							<Switch
+								value={!!birthdayParts}
+								onValueChange={(on) => saveBirthday(on ? new Date() : null)}
+								accessibilityLabel={t("dog_birthday_set")}
+							/>
+						}
+					/>
+					{birthdayParts && (
+						<DateField
+							label={t("dog_birthday")}
+							value={birthdayDate}
+							onChange={saveBirthday}
+							maximumDate={new Date()}
+						/>
+					)}
 					<Row title={t("current_weight_short")} right={value(weightText)} />
 					<Row title={t("last_bath_short")} right={value(lastBathText)} />
 				</Group>

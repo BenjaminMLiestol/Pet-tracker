@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { usePet } from "./PetContext";
 import { useCare } from "./CareContext";
 import { planCareReminders, type CareDue } from "../utils/careReminders";
+import { planBirthdayReminders } from "../utils/birthday";
 import { planFoodReminders } from "../utils/food";
 import { useMedicines } from "./MedicineContext";
 import { planMedicineReminders } from "../utils/medicine";
@@ -78,6 +79,7 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 	const { token, user } = useAuth();
 	const {
 		name,
+		birthday,
 		hasFedToday,
 		hasWalkedToday,
 		feedingsToday,
@@ -235,6 +237,15 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 				);
 			}
 
+			// Birthday: 09:00 on the day, this year and next.
+			for (const b of planBirthdayReminders(now, birthday)) {
+				await schedule(
+					b.at,
+					t("reminder_birthday_title", { name }),
+					t(b.age > 0 ? "reminder_birthday_body_age" : "reminder_birthday_body", { name, age: b.age }),
+				);
+			}
+
 			// Next Sundays, skipping any within 6 days of the last logged weight.
 			const daysUntilSunday = (WEIGH_IN_DAY - now.getDay() + 7) % 7;
 			for (let w = 0; w < WEIGH_IN_WEEKS_AHEAD; w += 1) {
@@ -257,6 +268,7 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 		enabled,
 		token,
 		name,
+		birthday,
 		hasFedToday,
 		hasWalkedToday,
 		feedingsToday,
