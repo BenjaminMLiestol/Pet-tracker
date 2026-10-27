@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/opt/openjdk@17/bin:$HOME/.maestro/bin:$PATH"
 BACKEND_DIR="${BACKEND_DIR:-../pet-tracker-backend}"
 BUNDLE_ID="com.benjaminliestol.pettracker"
-APP_PATH="${APP_PATH:-/tmp/pt-derived/Build/Products/Debug-iphonesimulator/pettracker.app}"
+APP_PATH="${APP_PATH:-/tmp/pt-derived/Build/Products/Debug-iphonesimulator/PetTracker.app}"
 
 # A throwaway local test account (never a real person's).
 export E2E_EMAIL="e2e-test@example.test"

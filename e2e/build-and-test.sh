@@ -12,10 +12,10 @@ export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
 DERIVED="${DERIVED:-/tmp/pt-derived}"
 SIMULATOR="${SIMULATOR:-$(xcrun simctl list devices booted | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -1)}"
 [ -n "$SIMULATOR" ] || { echo "build: no booted simulator" >&2; exit 2; }
-[ -d ios/pettracker.xcworkspace ] || { echo "build: no native project. Run: npx expo prebuild --platform ios --clean" >&2; exit 2; }
+[ -d ios/PetTracker.xcworkspace ] || { echo "build: no native project. Run: npx expo prebuild --platform ios --clean" >&2; exit 2; }
 
 echo "build: compiling for the simulator ($SIMULATOR)"
-(cd ios && xcodebuild -workspace pettracker.xcworkspace -scheme pettracker -configuration Debug \
+(cd ios && xcodebuild -workspace PetTracker.xcworkspace -scheme PetTracker -configuration Debug \
   -destination "id=$SIMULATOR" -derivedDataPath "$DERIVED" build >/tmp/pt-build.log 2>&1)
 if ! grep -q "BUILD SUCCEEDED" /tmp/pt-build.log; then
   echo "build: FAILED, see /tmp/pt-build.log" >&2
@@ -24,4 +24,4 @@ if ! grep -q "BUILD SUCCEEDED" /tmp/pt-build.log; then
 fi
 echo "build: succeeded"
 
-APP_PATH="$DERIVED/Build/Products/Debug-iphonesimulator/pettracker.app" exec bash e2e/run.sh
+APP_PATH="$DERIVED/Build/Products/Debug-iphonesimulator/PetTracker.app" exec bash e2e/run.sh

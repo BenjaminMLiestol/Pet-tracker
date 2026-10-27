@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "pet-tracker",
+    "name": "PetTracker",
     "slug": "pet-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -52,7 +52,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Pet Tracker bruker Face ID for å låse opp appen."
+          "faceIDPermission": "PetTracker bruker Face ID for å låse opp appen."
         }
       ],
       "./plugins/withoutPushEntitlement",
@@ -60,7 +60,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Pet Tracker trenger tilgang til bildene dine for at du kan velge et bilde av hunden."
+          "photosPermission": "PetTracker trenger tilgang til bildene dine for at du kan velge et bilde av hunden."
         }
       ]
     ]

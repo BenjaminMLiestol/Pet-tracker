@@ -2,7 +2,7 @@
 module.exports = (config) => ({
 	type: "widget",
 	name: "PetWidget",
-	displayName: "Pet Tracker",
+	displayName: "PetTracker",
 	// Buttons that act without opening the app (the log buttons) need iOS 17.
 	deploymentTarget: "17.0",
 	frameworks: ["SwiftUI", "WidgetKit", "AppIntents"],

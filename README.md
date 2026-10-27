@@ -1,4 +1,4 @@
-# Pet Tracker (mobile app)
+# PetTracker (mobile app)
 
 Expo / React Native app for tracking a pet's feedings, walks, baths, weight and vet / vaccination / flea-tick-worming care. Talks to [pet-tracker-backend](../pet-tracker-backend) (Laravel, `/api/v1`).
 

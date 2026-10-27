@@ -88,7 +88,7 @@ enum Words {
 	}
 	static var fed: String { norwegian ? "Matet" : "Fed" }
 	static var walked: String { norwegian ? "Tur" : "Walks" }
-	static var openApp: String { norwegian ? "Åpne Pet Tracker" : "Open Pet Tracker" }
+	static var openApp: String { norwegian ? "Åpne PetTracker" : "Open PetTracker" }
 	static var signIn: String { norwegian ? "Logg inn i appen først" : "Sign in to the app first" }
 	static var logFeeding: String { norwegian ? "Logg mating" : "Log feeding" }
 	static var logWalk: String { norwegian ? "Logg tur" : "Log a walk" }
